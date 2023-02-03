@@ -7,9 +7,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"group-chat-service/gen"
-	"io"
 	"log"
 	"net"
+	"strconv"
+	"time"
 )
 
 type groupChatServer struct {
@@ -41,19 +42,15 @@ func (g *groupChatServer) PrintHistory(context.Context, *gen.PrintHistoryRequest
 }
 
 func (g *groupChatServer) RefreshChat(stream gen.GroupChat_RefreshChatServer) error {
-	for {
-		_, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
+	for i := 0; i < 5; i++ {
+		if err := stream.Send(&gen.RefreshChatStream{Message: "Server message to test streams " + strconv.Itoa(i)}); err != nil {
 			return err
 		}
 
-		if err := stream.Send(&gen.RefreshChatStream{Message: "Server message to test streams"}); err != nil {
-			return err
-		}
+		time.Sleep(1 * time.Second)
 	}
+
+	return nil
 }
 
 func main() {
