@@ -1,9 +1,77 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"group-chat-service/gen"
+	"io"
+	"log"
+	"net"
 )
 
+type groupChatServer struct {
+	gen.UnimplementedGroupChatServer
+}
+
+func (g *groupChatServer) Login(context.Context, *gen.LoginRequest) (*gen.LoginResponse, error) {
+	return &gen.LoginResponse{}, nil
+}
+
+func (g *groupChatServer) JoinChat(context.Context, *gen.JoinChatRequest) (*gen.JoinChatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method JoinChat not implemented")
+}
+
+func (g *groupChatServer) AppendChat(context.Context, *gen.AppendChatRequest) (*gen.AppendChatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AppendChat not implemented")
+}
+
+func (g *groupChatServer) LikeChat(context.Context, *gen.LikeChatRequest) (*gen.LikeChatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LikeChat not implemented")
+}
+
+func (g *groupChatServer) RemoveLike(context.Context, *gen.RemoveLikeRequest) (*gen.RemoveLikeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveLike not implemented")
+}
+
+func (g *groupChatServer) PrintHistory(context.Context, *gen.PrintHistoryRequest) (*gen.PrintHistoryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrintHistory not implemented")
+}
+
+func (g *groupChatServer) RefreshChat(stream gen.GroupChat_RefreshChatServer) error {
+	for {
+		_, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		if err := stream.Send(&gen.RefreshChatStream{Message: "Server message to test streams"}); err != nil {
+			return err
+		}
+	}
+}
+
 func main() {
-	fmt.Println("Hello server")
+	// Create a TCP listener
+	lis, err := net.Listen("tcp", "localhost:50051")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	// Create a new gRPC server instance
+	s := grpc.NewServer()
+
+	// Register your server implementation with the gRPC server
+	gen.RegisterGroupChatServer(s, &groupChatServer{})
+
+	// Start the gRPC server
+	fmt.Println("Starting gRPC server on port 50051...")
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
 }
