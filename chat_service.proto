@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+option go_package = "group_chat_service/gen";
+
+service GroupChat {
+  rpc Login (LoginRequest) returns (LoginResponse) {}
+  rpc JoinChat (JoinChatRequest) returns (JoinChatResponse) {}
+  rpc AppendChat (AppendChatRequest) returns (AppendChatResponse) {}
+  rpc LikeChat (LikeChatRequest) returns (LikeChatResponse) {}
+  rpc RemoveLike (RemoveLikeRequest) returns (RemoveLikeResponse) {}
+  rpc PrintHistory (PrintHistoryRequest) returns (PrintHistoryResponse) {}
+}
+
+message LoginRequest {
+  string user_name = 1;
+  string group_name = 2;
+}
+
+message LoginResponse {
+}
+
+
+message JoinChatRequest {
+  string new_group_name = 1;
+  string old_group_name = 2;
+  string username = 3;
+}
+
+message JoinChatResponse {
+  int32 count = 1;
+}
+
+
+message AppendChatRequest {
+  string user_name = 1;
+  string group_name = 2;
+  string message = 3;
+}
+
+message AppendChatResponse {
+}
+
+
+message LikeChatRequest {
+  string user_name = 1;
+  string group_name = 2;
+  int32 message_id = 3;
+}
+
+
+message LikeChatResponse {
+}
+
+message RemoveLikeRequest {
+  string user_name = 1;
+  string group_name = 2;
+  int32 message_id = 3;
+}
+
+message RemoveLikeResponse {
+}
+
+
+message PrintHistoryRequest {
+  string user_name = 1;
+  string group_name = 2;
+}
+
+
+message PrintHistoryResponse {
+}
