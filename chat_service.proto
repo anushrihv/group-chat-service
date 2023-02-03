@@ -9,6 +9,7 @@ service GroupChat {
   rpc LikeChat (LikeChatRequest) returns (LikeChatResponse) {}
   rpc RemoveLike (RemoveLikeRequest) returns (RemoveLikeResponse) {}
   rpc PrintHistory (PrintHistoryRequest) returns (PrintHistoryResponse) {}
+  rpc RefreshChat(stream RefreshChatStream) returns (stream RefreshChatStream) {}
 }
 
 message LoginRequest {
@@ -68,4 +69,8 @@ message PrintHistoryRequest {
 
 
 message PrintHistoryResponse {
+}
+
+message RefreshChatStream {
+  string message = 1;
 }
