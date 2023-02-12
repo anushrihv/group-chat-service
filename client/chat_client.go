@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	pb "group-chat-service/gen"
+	"group-chat-service/gen"
 	"log"
 	"os"
 	"strings"
@@ -14,55 +14,78 @@ import (
 
 func main() {
 
-	fmt.Print("Welcome to the GroupChat service!")
+	fmt.Println("Welcome to the GroupChat service!")
 
-	var port string
-	var serverAddr string
+	var client gen.GroupChatClient
+	var conn *grpc.ClientConn
+	var groupName, userName string
 
+outer:
 	for {
 		// Read from keyboard
-		fmt.Print("Enter your command: ")
+		fmt.Println("Enter your command: ")
 		reader := bufio.NewReader(os.Stdin)
 		userCommand, _ := reader.ReadString('\n')
 		userCommand = userCommand[:len(userCommand)-1] // strip trailing '\n'
 
 		commandFields := strings.Fields(userCommand)
 
-		// c localhost:12000
-		if strings.Compare(commandFields[0], "c") == 0 {
-			// commandFields[1] = localhost:12000
-			address := strings.Split(commandFields[1], ":")
-			port = address[0]
-			serverAddr = address[1]
+		switch commandFields[0] {
+		case "c":
+			if client != nil {
+				fmt.Println("Connection already established. Please try another command")
+				continue
+			}
 
-			break
-		} else {
-			fmt.Print("Invalid command: To connect to server, enter: c hostname or c IPAddress.")
+			client, conn = establishConnection(client, conn, commandFields[1])
+		case "u":
+			if strings.Compare(userName, commandFields[1]) != 0 {
+				userName = login(commandFields[1], groupName, client)
+				groupName = ""
+			} else {
+				fmt.Println("User is already logged in as " + userName)
+			}
+		case "exit":
+			conn.Close()
+			client = nil
+			fmt.Println()
+			break outer
+		default:
+			fmt.Println("Please enter a valid command")
 		}
 	}
+}
 
-	// Connect to RPC server
-	conn, err := grpc.Dial(serverAddr+":"+port, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func establishConnection(client gen.GroupChatClient, conn *grpc.ClientConn, address string) (gen.GroupChatClient, *grpc.ClientConn) {
+	var err error
+
+	conn, err = grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal("dialing:", err)
 	}
-	client := pb.NewGroupChatClient(conn)
+	client = gen.NewGroupChatClient(conn)
+	fmt.Println("Connection established successfully")
 
-	// Set up arguments for RPC call
-	username := "srushti"
-	groupname := "group1"
-	req := pb.LoginRequest{UserName: username, GroupName: groupname}
-	fmt.Println("name: ", username)
-	fmt.Println("group", groupname)
+	return client, conn
+}
 
-	// Do RPC call
-	reply, err := client.Login(context.Background(), &req)
-	if err != nil {
-		log.Fatal(err)
+func login(userName, groupName string, client gen.GroupChatClient) string {
+	if userName == "" {
+		fmt.Println("UserName cannot be empty. Please try again")
+		return ""
 	}
 
-	// Print reply
-	fmt.Println("reply: ", reply)
+	loginRequest := gen.LoginRequest{
+		UserName:  userName,
+		GroupName: groupName,
+	}
 
-	conn.Close()
+	_, err := client.Login(context.Background(), &loginRequest)
+	if err != nil {
+		fmt.Println("Error occurred while logging in the user ", err)
+	} else {
+		fmt.Println("User logged in successfully")
+	}
+
+	return userName
 }
