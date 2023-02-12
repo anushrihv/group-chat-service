@@ -1,9 +1,154 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"group-chat-service/gen"
+	"io"
+	"log"
+	"net"
 )
 
+type groupChatServer struct {
+	gen.UnimplementedGroupChatServer
+	groupState map[string]gen.GroupData
+}
+
+func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.LoginResponse, error) {
+	if req.UserName == "" {
+		return nil, errors.New("UserName cannot be empty")
+	}
+
+	if req.GroupName != "" {
+		// Remove the user from the old group chat
+		groupData, ok := g.groupState[req.GroupName]
+		if ok {
+			users := groupData.GetUsers()
+			delete(users, req.UserName)
+		} else {
+			// group not found. ideally should not happen. log and error and ignore
+			fmt.Println("User " + req.UserName + "'s old group " + req.GroupName + " not found!")
+		}
+	}
+
+	return &gen.LoginResponse{}, nil
+}
+
+func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) (*gen.JoinChatResponse, error) {
+	if req.UserName == "" {
+		return nil, errors.New("UserName cannot be empty")
+	} else if req.NewGroupName == "" {
+		return nil, errors.New("new group name cannot be empty")
+	}
+
+	if req.OldGroupName != "" {
+		// remove the user from the old group chat
+		groupData, ok := g.groupState[req.OldGroupName]
+		if ok {
+			removeUserFromGroup(req.GetUserName(), groupData.GetUsers())
+		}
+	}
+
+	groupData, ok := g.groupState[req.NewGroupName]
+	if ok {
+		// add the user to the existing group
+		addUserToGroup(req.GetUserName(), groupData.GetUsers())
+	} else {
+		// create the group since it does not exist
+		createGroup(req.GetNewGroupName(), g.groupState)
+	}
+
+	return nil, nil
+}
+
+/**
+If the user has already joined the chat from other clients, increase the client count
+Else set the clientCount to 1
+*/
+func addUserToGroup(userName string, users map[string]int32) {
+	clientCount, ok := users[userName]
+	if ok {
+		users[userName] = clientCount + 1
+	} else {
+		users[userName] = 1
+	}
+}
+
+/**
+If the user has joined the chat via multiple clients, just reduce the clientCount by 1.
+Else, remove the user from the group
+*/
+func removeUserFromGroup(userName string, users map[string]int32) {
+	clientCount := users[userName]
+	if clientCount == 1 {
+		delete(users, userName)
+	} else {
+		users[userName] = clientCount - 1
+	}
+}
+
+func createGroup(groupName string, groupState map[string]gen.GroupData) {
+	groupData := gen.GroupData{
+		Users:    make(map[string]int32),
+		Messages: make([]*gen.Message, 0),
+	}
+
+	groupState[groupName] = groupData
+}
+
+func (g *groupChatServer) AppendChat(context.Context, *gen.AppendChatRequest) (*gen.AppendChatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AppendChat not implemented")
+}
+
+func (g *groupChatServer) LikeChat(context.Context, *gen.LikeChatRequest) (*gen.LikeChatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LikeChat not implemented")
+}
+
+func (g *groupChatServer) RemoveLike(context.Context, *gen.RemoveLikeRequest) (*gen.RemoveLikeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveLike not implemented")
+}
+
+func (g *groupChatServer) PrintHistory(context.Context, *gen.PrintHistoryRequest) (*gen.PrintHistoryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrintHistory not implemented")
+}
+
+func (g *groupChatServer) RefreshChat(stream gen.GroupChat_RefreshChatServer) error {
+	for {
+		_, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		if err := stream.Send(&gen.RefreshChatStream{Message: "Server message to test streams"}); err != nil {
+			return err
+		}
+	}
+}
+
 func main() {
-	fmt.Println("Hello server")
+	// Create a TCP listener
+	lis, err := net.Listen("tcp", "localhost:50051")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	// Create a new gRPC server instance
+	s := grpc.NewServer()
+
+	// Register your server implementation with the gRPC server
+	srv := &groupChatServer{groupState: make(map[string]gen.GroupData)}
+	gen.RegisterGroupChatServer(s, srv)
+
+	// Start the gRPC server
+	fmt.Println("Starting gRPC server on port 50051...")
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
 }
