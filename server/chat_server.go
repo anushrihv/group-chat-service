@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -14,14 +15,89 @@ import (
 
 type groupChatServer struct {
 	gen.UnimplementedGroupChatServer
+	groupState map[string]gen.GroupData
 }
 
-func (g *groupChatServer) Login(context.Context, *gen.LoginRequest) (*gen.LoginResponse, error) {
+func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.LoginResponse, error) {
+	if req.UserName == "" {
+		return nil, errors.New("UserName cannot be empty")
+	}
+
+	if req.GroupName != "" {
+		// Remove the user from the old group chat
+		groupData, ok := g.groupState[req.GroupName]
+		if ok {
+			users := groupData.GetUsers()
+			delete(users, req.UserName)
+		} else {
+			// group not found. ideally should not happen. log and error and ignore
+			fmt.Println("User " + req.UserName + "'s old group " + req.GroupName + " not found!")
+		}
+	}
+
 	return &gen.LoginResponse{}, nil
 }
 
-func (g *groupChatServer) JoinChat(context.Context, *gen.JoinChatRequest) (*gen.JoinChatResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method JoinChat not implemented")
+func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) (*gen.JoinChatResponse, error) {
+	if req.UserName == "" {
+		return nil, errors.New("UserName cannot be empty")
+	} else if req.NewGroupName == "" {
+		return nil, errors.New("new group name cannot be empty")
+	}
+
+	if req.OldGroupName != "" {
+		// remove the user from the old group chat
+		groupData, ok := g.groupState[req.OldGroupName]
+		if ok {
+			removeUserFromGroup(req.GetUserName(), groupData.GetUsers())
+		}
+	}
+
+	groupData, ok := g.groupState[req.NewGroupName]
+	if ok {
+		// add the user to the existing group
+		addUserToGroup(req.GetUserName(), groupData.GetUsers())
+	} else {
+		// create the group since it does not exist
+		createGroup(req.GetNewGroupName(), g.groupState)
+	}
+
+	return nil, nil
+}
+
+/**
+If the user has already joined the chat from other clients, increase the client count
+Else set the clientCount to 1
+*/
+func addUserToGroup(userName string, users map[string]int32) {
+	clientCount, ok := users[userName]
+	if ok {
+		users[userName] = clientCount + 1
+	} else {
+		users[userName] = 1
+	}
+}
+
+/**
+If the user has joined the chat via multiple clients, just reduce the clientCount by 1.
+Else, remove the user from the group
+*/
+func removeUserFromGroup(userName string, users map[string]int32) {
+	clientCount := users[userName]
+	if clientCount == 1 {
+		delete(users, userName)
+	} else {
+		users[userName] = clientCount - 1
+	}
+}
+
+func createGroup(groupName string, groupState map[string]gen.GroupData) {
+	groupData := gen.GroupData{
+		Users:    make(map[string]int32),
+		Messages: make([]*gen.Message, 0),
+	}
+
+	groupState[groupName] = groupData
 }
 
 func (g *groupChatServer) AppendChat(context.Context, *gen.AppendChatRequest) (*gen.AppendChatResponse, error) {
@@ -67,7 +143,8 @@ func main() {
 	s := grpc.NewServer()
 
 	// Register your server implementation with the gRPC server
-	gen.RegisterGroupChatServer(s, &groupChatServer{})
+	srv := &groupChatServer{groupState: make(map[string]gen.GroupData)}
+	gen.RegisterGroupChatServer(s, srv)
 
 	// Start the gRPC server
 	fmt.Println("Starting gRPC server on port 50051...")
