@@ -15,7 +15,7 @@ import (
 
 type groupChatServer struct {
 	gen.UnimplementedGroupChatServer
-	groupState map[string]gen.GroupData
+	groupState map[string]*gen.GroupData
 }
 
 func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.LoginResponse, error) {
@@ -35,6 +35,8 @@ func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.
 		}
 	}
 
+	fmt.Println("User " + req.UserName + " logged in successfully")
+	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	return &gen.LoginResponse{}, nil
 }
 
@@ -49,40 +51,50 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		// remove the user from the old group chat
 		groupData, ok := g.groupState[req.OldGroupName]
 		if ok {
-			removeUserFromGroup(req.GetUserName(), groupData.GetUsers())
+			fmt.Println("Client logged out from the old group chat " + req.OldGroupName)
+			removeUserFromGroup(req.GetUserName(), req.GetNewGroupName(), groupData.GetUsers())
 		}
 	}
 
-	groupData, ok := g.groupState[req.NewGroupName]
+	_, ok := g.groupState[req.NewGroupName]
 	if ok {
 		// add the user to the existing group
-		addUserToGroup(req.GetUserName(), groupData.GetUsers())
+		addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
 	} else {
 		// create the group since it does not exist
 		createGroup(req.GetNewGroupName(), g.groupState)
+		addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
 	}
 
-	return nil, nil
+	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
+	return &gen.JoinChatResponse{}, nil
 }
 
-/**
+/*
+*
 If the user has already joined the chat from other clients, increase the client count
 Else set the clientCount to 1
 */
-func addUserToGroup(userName string, users map[string]int32) {
+func addUserToGroup(userName, groupName string, users map[string]int32) {
 	clientCount, ok := users[userName]
 	if ok {
-		users[userName] = clientCount + 1
+		clientCount++
+		users[userName] = clientCount
 	} else {
-		users[userName] = 1
+		clientCount = 1
+		users[userName] = clientCount
 	}
+
+	fmt.Printf("User %s added to the group %s with %d clients", userName, groupName, clientCount)
+	fmt.Println()
 }
 
-/**
+/*
+*
 If the user has joined the chat via multiple clients, just reduce the clientCount by 1.
 Else, remove the user from the group
 */
-func removeUserFromGroup(userName string, users map[string]int32) {
+func removeUserFromGroup(userName, groupName string, users map[string]int32) {
 	clientCount := users[userName]
 	if clientCount == 1 {
 		delete(users, userName)
@@ -91,13 +103,15 @@ func removeUserFromGroup(userName string, users map[string]int32) {
 	}
 }
 
-func createGroup(groupName string, groupState map[string]gen.GroupData) {
-	groupData := gen.GroupData{
+func createGroup(groupName string, groupState map[string]*gen.GroupData) {
+	groupData := &gen.GroupData{
 		Users:    make(map[string]int32),
 		Messages: make([]*gen.Message, 0),
 	}
 
 	groupState[groupName] = groupData
+	fmt.Println("Created group " + groupName)
+	fmt.Printf("groupState[%s]: %v\n", groupName, groupState[groupName])
 }
 
 func (g *groupChatServer) AppendChat(context.Context, *gen.AppendChatRequest) (*gen.AppendChatResponse, error) {
@@ -143,7 +157,7 @@ func main() {
 	s := grpc.NewServer()
 
 	// Register your server implementation with the gRPC server
-	srv := &groupChatServer{groupState: make(map[string]gen.GroupData)}
+	srv := &groupChatServer{groupState: make(map[string]*gen.GroupData)}
 	gen.RegisterGroupChatServer(s, srv)
 
 	// Start the gRPC server
