@@ -28,7 +28,6 @@ message JoinChatRequest {
 }
 
 message JoinChatResponse {
-  int32 count = 1;
 }
 
 

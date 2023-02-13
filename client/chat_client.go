@@ -45,6 +45,13 @@ outer:
 			} else {
 				fmt.Println("User is already logged in as " + userName)
 			}
+		case "j":
+			newGroupName := commandFields[1]
+			if strings.Compare(groupName, newGroupName) == 0 {
+				fmt.Println("User has already joined the group " + newGroupName)
+			} else {
+				groupName = joinGroupChat(userName, groupName, newGroupName, client)
+			}
 		case "exit":
 			conn.Close()
 			client = nil
@@ -88,4 +95,29 @@ func login(userName, groupName string, client gen.GroupChatClient) string {
 	}
 
 	return userName
+}
+
+func joinGroupChat(userName, oldGroupName, newGroupName string, client gen.GroupChatClient) string {
+	if userName == "" {
+		fmt.Println("UserName cannot be empty. Please try again")
+		return ""
+	} else if newGroupName == "" {
+		fmt.Println("GroupName cannot be empty. Please try again")
+		return ""
+	}
+
+	joinChatRequest := gen.JoinChatRequest{
+		NewGroupName: newGroupName,
+		OldGroupName: oldGroupName,
+		UserName:     userName,
+	}
+
+	_, err := client.JoinChat(context.Background(), &joinChatRequest)
+	if err != nil {
+		fmt.Println("Error occurred while joining the new group chat ", err)
+		return oldGroupName
+	} else {
+		fmt.Println("User joined the new group chat " + newGroupName + " successfully")
+		return newGroupName
+	}
 }
