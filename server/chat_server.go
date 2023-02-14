@@ -8,7 +8,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"group-chat-service/gen"
-	"io"
 	"log"
 	"net"
 )
@@ -114,8 +113,28 @@ func createGroup(groupName string, groupState map[string]*gen.GroupData) {
 	fmt.Printf("groupState[%s]: %v\n", groupName, groupState[groupName])
 }
 
-func (g *groupChatServer) AppendChat(context.Context, *gen.AppendChatRequest) (*gen.AppendChatResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method AppendChat not implemented")
+func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatRequest) (*gen.AppendChatResponse, error) {
+	// get id of most recently added message
+	_, ok := g.groupState[req.GroupName]
+
+	if ok {
+		createMessage(req.UserName, req.GroupName, req.Message, g)
+		fmt.Println("Created message " + req.Message + " by user " + req.UserName + " in group " + req.GroupName)
+		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
+		return &gen.AppendChatResponse{}, nil
+	} else {
+		return nil, errors.New("group not found")
+	}
+}
+
+func createMessage(userName, groupName, message string, g *groupChatServer) {
+	messageObject := &gen.Message{
+		Message: message,
+		Owner:   userName,
+		Likes:   nil,
+	}
+	g.groupState[groupName].Messages = append(g.groupState[groupName].Messages, messageObject)
+	fmt.Println("Updated messages: ", g.groupState[groupName].Messages)
 }
 
 func (g *groupChatServer) LikeChat(context.Context, *gen.LikeChatRequest) (*gen.LikeChatResponse, error) {
@@ -130,20 +149,13 @@ func (g *groupChatServer) PrintHistory(context.Context, *gen.PrintHistoryRequest
 	return nil, status.Errorf(codes.Unimplemented, "method PrintHistory not implemented")
 }
 
-func (g *groupChatServer) RefreshChat(stream gen.GroupChat_RefreshChatServer) error {
-	for {
-		_, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
+func (g *groupChatServer) RefreshChat(context.Context, *gen.RefreshChatRequest) (*gen.RefreshChatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshChat not implemented")
+}
 
-		if err := stream.Send(&gen.RefreshChatStream{Message: "Server message to test streams"}); err != nil {
-			return err
-		}
-	}
+func (g *groupChatServer) SubscribeToGroupUpdates(gen.GroupChat_SubscribeToGroupUpdatesServer) error {
+
+	return nil
 }
 
 func main() {
