@@ -131,7 +131,7 @@ func createMessage(userName, groupName, message string, g *groupChatServer) {
 	messageObject := &gen.Message{
 		Message: message,
 		Owner:   userName,
-		Likes:   nil,
+		Likes:   make(map[string]bool),
 	}
 	g.groupState[groupName].Messages = append(g.groupState[groupName].Messages, messageObject)
 	fmt.Println("Updated messages: ", g.groupState[groupName].Messages)
@@ -147,6 +147,7 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 			return nil, errors.New("cannot like a message again")
 		}
 		groupchat.Messages[req.MessageId-1].Likes[req.UserName] = true
+		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	}
 
 	return &gen.LikeChatResponse{}, nil
@@ -157,6 +158,7 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 	if ok {
 		if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
 			delete(groupchat.Messages[req.MessageId-1].Likes, req.UserName)
+			fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 		} else {
 			return nil, errors.New("cannot remove like from message not liked before")
 		}
