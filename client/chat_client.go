@@ -9,6 +9,7 @@ import (
 	"group-chat-service/gen"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -52,7 +53,26 @@ outer:
 			} else {
 				groupName = joinGroupChat(userName, groupName, newGroupName, client)
 			}
-		case "exit":
+		case "a":
+			message := userCommand[2:len(userCommand)]
+			appendChat(userName, groupName, message, client)
+		case "l":
+			messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
+			if err != nil {
+				fmt.Println("Invalid message id")
+			}
+			messageId := int32(messageId64)
+			likeChat(userName, groupName, messageId, client)
+		case "r":
+			messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
+			if err != nil {
+				fmt.Println("Invalid message id")
+			}
+			messageId := int32(messageId64)
+			removeLikeChat(userName, groupName, messageId, client)
+		case "p":
+			printHistory(userName, groupName, client)
+		case "q":
 			conn.Close()
 			client = nil
 			fmt.Println()
@@ -120,4 +140,71 @@ func joinGroupChat(userName, oldGroupName, newGroupName string, client gen.Group
 		fmt.Println("User joined the new group chat " + newGroupName + " successfully")
 		return newGroupName
 	}
+}
+
+func appendChat(userName, groupName, message string, client gen.GroupChatClient) {
+
+	appendChatRequest := gen.AppendChatRequest{
+		UserName:  userName,
+		GroupName: groupName,
+		Message:   message,
+	}
+
+	_, err := client.AppendChat(context.Background(), &appendChatRequest)
+	if err != nil {
+		fmt.Println("Error occurred while appending message to groupchat", err)
+	} else {
+		fmt.Println("Message appended to groupchat successfully")
+	}
+
+}
+
+func likeChat(userName, groupName string, messageId int32, client gen.GroupChatClient) {
+
+	likeChatRequest := gen.LikeChatRequest{
+		UserName:  userName,
+		GroupName: groupName,
+		MessageId: messageId,
+	}
+
+	_, err := client.LikeChat(context.Background(), &likeChatRequest)
+	if err != nil {
+		fmt.Println("Error occurred while liking message", err)
+	} else {
+		fmt.Println("Liked messaged successfully")
+	}
+
+}
+
+func removeLikeChat(userName, groupName string, messageId int32, client gen.GroupChatClient) {
+
+	removeLikeRequest := gen.RemoveLikeRequest{
+		UserName:  userName,
+		GroupName: groupName,
+		MessageId: messageId,
+	}
+
+	_, err := client.RemoveLike(context.Background(), &removeLikeRequest)
+	if err != nil {
+		fmt.Println("Error occurred while removing like from message", err)
+	} else {
+		fmt.Println("Like removed from message successfully")
+	}
+
+}
+
+func printHistory(userName, groupName string, client gen.GroupChatClient) {
+
+	printHistoryRequest := gen.PrintHistoryRequest{
+		UserName:  userName,
+		GroupName: groupName,
+	}
+
+	_, err := client.PrintHistory(context.Background(), &printHistoryRequest)
+	if err != nil {
+		fmt.Println("Error occurred printing groupchat message history", err)
+	} else {
+		fmt.Println("Groupchat message history printed successfully")
+	}
+
 }

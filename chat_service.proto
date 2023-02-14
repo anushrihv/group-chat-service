@@ -81,8 +81,7 @@ message GroupData {
 
 
 message Message {
-  int32 id = 1;
-  string message = 2;
-  string owner = 3;
-  map<string, bool> likes = 4;
+  string message = 1;
+  string owner = 2;
+  map<string, bool> likes = 3;
 }
