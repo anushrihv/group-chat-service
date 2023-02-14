@@ -9,7 +9,8 @@ service GroupChat {
   rpc LikeChat (LikeChatRequest) returns (LikeChatResponse) {}
   rpc RemoveLike (RemoveLikeRequest) returns (RemoveLikeResponse) {}
   rpc PrintHistory (PrintHistoryRequest) returns (PrintHistoryResponse) {}
-  rpc RefreshChat(stream RefreshChatStream) returns (stream RefreshChatStream) {}
+  rpc RefreshChat(RefreshChatRequest) returns (RefreshChatResponse) {}
+  rpc SubscribeToGroupUpdates(stream Unsubscribe) returns (stream GroupUpdates) {}
 }
 
 message LoginRequest {
@@ -70,13 +71,30 @@ message PrintHistoryRequest {
 message PrintHistoryResponse {
 }
 
-message RefreshChatStream {
-  string message = 1;
+message RefreshChatRequest {
+  string user_name = 1;
+  string group_name = 2;
+}
+
+message RefreshChatResponse {
+  string group_name = 1;
+  GroupData group_data = 2;
+}
+
+message Unsubscribe {
+  string user_name = 1;
+  string group_name = 2;
+}
+
+message GroupUpdates {
+  string group_updated = 1;
+  int32 version = 2;
 }
 
 message GroupData {
   map<string, int32> users = 1;
   repeated Message messages = 2;
+  int32 version = 3;
 }
 
 
