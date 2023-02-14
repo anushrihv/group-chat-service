@@ -8,7 +8,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"group-chat-service/gen"
-	"io"
 	"log"
 	"net"
 )
@@ -150,20 +149,13 @@ func (g *groupChatServer) PrintHistory(context.Context, *gen.PrintHistoryRequest
 	return nil, status.Errorf(codes.Unimplemented, "method PrintHistory not implemented")
 }
 
-func (g *groupChatServer) RefreshChat(stream gen.GroupChat_RefreshChatServer) error {
-	for {
-		_, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
+func (g *groupChatServer) RefreshChat(context.Context, *gen.RefreshChatRequest) (*gen.RefreshChatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshChat not implemented")
+}
 
-		if err := stream.Send(&gen.RefreshChatStream{Message: "Server message to test streams"}); err != nil {
-			return err
-		}
-	}
+func (g *groupChatServer) SubscribeToGroupUpdates(gen.GroupChat_SubscribeToGroupUpdatesServer) error {
+
+	return nil
 }
 
 func main() {

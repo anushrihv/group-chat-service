@@ -7,19 +7,23 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"group-chat-service/gen"
+	"io"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 )
 
+var client gen.GroupChatClient
+var conn *grpc.ClientConn
+var groupName, userName string
+var version int32 = 1
+
 func main() {
 
 	fmt.Println("Welcome to the GroupChat service!")
-
-	var client gen.GroupChatClient
-	var conn *grpc.ClientConn
-	var groupName, userName string
+	var stream gen.GroupChat_SubscribeToGroupUpdatesClient
+	var err error
 
 outer:
 	for {
@@ -39,6 +43,12 @@ outer:
 			}
 
 			client, conn = establishConnection(client, conn, commandFields[1])
+			stream, err = client.SubscribeToGroupUpdates(context.Background())
+			if err != nil {
+				log.Fatalf("Failed to subscribe to group updates stream: %v", err)
+			} else {
+				go listenToGroupUpdates(stream, client)
+			}
 		case "u":
 			if strings.Compare(userName, commandFields[1]) != 0 {
 				userName = login(commandFields[1], groupName, client)
@@ -207,4 +217,53 @@ func printHistory(userName, groupName string, client gen.GroupChatClient) {
 		fmt.Println("Groupchat message history printed successfully")
 	}
 
+}
+
+func listenToGroupUpdates(stream gen.GroupChat_SubscribeToGroupUpdatesClient, client gen.GroupChatClient) {
+	for {
+		groupUpdates, err := stream.Recv()
+		if err == io.EOF {
+			fmt.Println("exiting stream")
+			return
+		} else if err != nil {
+			log.Fatalf("stream to receive group chat updates failed: %v", err)
+		}
+		log.Printf("Received group updates for %s group with version %d",
+			groupUpdates.GroupUpdated, groupUpdates.Version)
+		log.Println()
+
+		if strings.Compare(groupUpdates.GroupUpdated, groupName) == 0 && version <= groupUpdates.Version {
+			PrintGroupState(client)
+		} else {
+			fmt.Println("ignoring group update")
+		}
+	}
+}
+
+func PrintGroupState(client gen.GroupChatClient) {
+	refreshChatRequest := gen.RefreshChatRequest{
+		UserName:  userName,
+		GroupName: groupName,
+	}
+
+	refreshChatResponse, err := client.RefreshChat(context.Background(), &refreshChatRequest)
+	if err != nil {
+		fmt.Println("Error occurred while refreshing chat ", err)
+		return
+	}
+
+	fmt.Println("Group : " + refreshChatResponse.GroupName)
+	fmt.Print("Participants : ")
+	for userName := range refreshChatResponse.GroupData.Users {
+		fmt.Print(userName)
+	}
+	fmt.Println()
+	fmt.Println("Messages : ")
+	for messageID, message := range refreshChatResponse.GroupData.Messages {
+		fmt.Printf("%d. %s: %s\n", messageID, message.Owner, message.Message)
+		fmt.Println()
+		fmt.Println("Likes : ", len(message.Likes))
+	}
+
+	version = refreshChatResponse.GroupData.Version
 }
