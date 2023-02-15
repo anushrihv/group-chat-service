@@ -114,8 +114,18 @@ func createGroup(groupName string, groupState map[string]*gen.GroupData) {
 }
 
 func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatRequest) (*gen.AppendChatResponse, error) {
+	if req.UserName == "" {
+		return nil, errors.New("UserName cannot be empty")
+	} else if req.GroupName == "" {
+		return nil, errors.New("new group name cannot be empty")
+	}
+
 	// get id of most recently added message
-	_, ok := g.groupState[req.GroupName]
+	groupchat, ok := g.groupState[req.GroupName]
+
+	if _, found := groupchat.Users[req.UserName]; !found {
+		return nil, errors.New("user doesn't belong to group")
+	}
 
 	if ok {
 		createMessage(req.UserName, req.GroupName, req.Message, g)
@@ -134,6 +144,7 @@ func createMessage(userName, groupName, message string, g *groupChatServer) {
 		Likes:   make(map[string]bool),
 	}
 	g.groupState[groupName].Messages = append(g.groupState[groupName].Messages, messageObject)
+	g.groupState[groupName].Version++
 	fmt.Println("Updated messages: ", g.groupState[groupName].Messages)
 }
 
@@ -147,6 +158,9 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 			return nil, errors.New("cannot like a message again")
 		}
 		groupchat.Messages[req.MessageId-1].Likes[req.UserName] = true
+		if int(req.MessageId) < len(groupchat.Messages) && int(req.MessageId) >= len(groupchat.Messages)-10 {
+			g.groupState[req.GroupName].Version++
+		}
 		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	}
 
@@ -158,6 +172,9 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 	if ok {
 		if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
 			delete(groupchat.Messages[req.MessageId-1].Likes, req.UserName)
+			if int(req.MessageId) < len(groupchat.Messages) && int(req.MessageId) >= len(groupchat.Messages)-10 {
+				g.groupState[req.GroupName].Version++
+			}
 			fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 		} else {
 			return nil, errors.New("cannot remove like from message not liked before")
@@ -166,8 +183,13 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 	return &gen.RemoveLikeResponse{}, nil
 }
 
-func (g *groupChatServer) PrintHistory(context.Context, *gen.PrintHistoryRequest) (*gen.PrintHistoryResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PrintHistory not implemented")
+func (g *groupChatServer) PrintHistory(_ context.Context, req *gen.PrintHistoryRequest) (*gen.PrintHistoryResponse, error) {
+	printHistoryResponse := gen.PrintHistoryResponse{
+		GroupName: req.GroupName,
+		GroupData: g.groupState[req.GroupName],
+	}
+
+	return &printHistoryResponse, nil
 }
 
 func (g *groupChatServer) RefreshChat(context.Context, *gen.RefreshChatRequest) (*gen.RefreshChatResponse, error) {
