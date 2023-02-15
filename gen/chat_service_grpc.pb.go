@@ -103,7 +103,7 @@ func (c *groupChatClient) RefreshChat(ctx context.Context, opts ...grpc.CallOpti
 }
 
 type GroupChat_RefreshChatClient interface {
-	Send(*RefreshChatStream) error
+	Send(*RefreshChatInput) error
 	Recv() (*RefreshChatStream, error)
 	grpc.ClientStream
 }
@@ -112,7 +112,7 @@ type groupChatRefreshChatClient struct {
 	grpc.ClientStream
 }
 
-func (x *groupChatRefreshChatClient) Send(m *RefreshChatStream) error {
+func (x *groupChatRefreshChatClient) Send(m *RefreshChatInput) error {
 	return x.ClientStream.SendMsg(m)
 }
 
@@ -290,7 +290,7 @@ func _GroupChat_RefreshChat_Handler(srv interface{}, stream grpc.ServerStream) e
 
 type GroupChat_RefreshChatServer interface {
 	Send(*RefreshChatStream) error
-	Recv() (*RefreshChatStream, error)
+	Recv() (*RefreshChatInput, error)
 	grpc.ServerStream
 }
 
@@ -302,8 +302,8 @@ func (x *groupChatRefreshChatServer) Send(m *RefreshChatStream) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *groupChatRefreshChatServer) Recv() (*RefreshChatStream, error) {
-	m := new(RefreshChatStream)
+func (x *groupChatRefreshChatServer) Recv() (*RefreshChatInput, error) {
+	m := new(RefreshChatInput)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}

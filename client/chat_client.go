@@ -46,9 +46,10 @@ func main() {
 	}
 
 	for {
+		fmt.Println("Listening to server messages")
 		in, err := stream.Recv()
 		if err == io.EOF {
-			// read done.
+			fmt.Println("read done")
 			return
 		}
 		if err != nil {

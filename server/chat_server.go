@@ -15,6 +15,8 @@ import (
 
 type groupChatServer struct {
 	gen.UnimplementedGroupChatServer
+	clients map[gen.GroupChat_RefreshChatServer]struct{}
+	updates chan string
 }
 
 func (g *groupChatServer) Login(context.Context, *gen.LoginRequest) (*gen.LoginResponse, error) {
@@ -42,15 +44,51 @@ func (g *groupChatServer) PrintHistory(context.Context, *gen.PrintHistoryRequest
 }
 
 func (g *groupChatServer) RefreshChat(stream gen.GroupChat_RefreshChatServer) error {
-	for i := 0; i < 5; i++ {
-		if err := stream.Send(&gen.RefreshChatStream{Message: "Server message to test streams " + strconv.Itoa(i)}); err != nil {
-			return err
-		}
+	g.AddClient(stream)
+	defer g.RemoveClient(stream)
 
-		time.Sleep(1 * time.Second)
+	for {
+		_, err := stream.Recv()
+		if err != nil {
+			log.Printf("Error receiving message from client: %v\n", err)
+			break
+		}
 	}
 
 	return nil
+}
+
+func (g *groupChatServer) AddClient(stream gen.GroupChat_RefreshChatServer) {
+	client := stream
+	g.clients[client] = struct{}{}
+	log.Printf("Client added, total clients: %d\n", len(g.clients))
+}
+
+func (g *groupChatServer) RemoveClient(stream gen.GroupChat_RefreshChatServer) {
+	client := stream
+	delete(g.clients, client)
+	log.Printf("Client removed, total clients: %d\n", len(g.clients))
+}
+
+// Broadcast listens for updates on the updates channel and broadcasts them to all the clients.
+func (g *groupChatServer) Broadcast() {
+	for {
+		update := <-g.updates
+		fmt.Println("received update " + update)
+		for client := range g.clients {
+			if err := client.Send(&gen.RefreshChatStream{Message: update}); err != nil {
+				log.Printf("Error sending update to client: %v\n", err)
+			}
+		}
+	}
+}
+
+func (g *groupChatServer) generateData() {
+	for i := 0; i < 100; i++ {
+		fmt.Println("generating data " + strconv.Itoa(i))
+		g.updates <- strconv.Itoa(i)
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func main() {
@@ -64,7 +102,10 @@ func main() {
 	s := grpc.NewServer()
 
 	// Register your server implementation with the gRPC server
-	gen.RegisterGroupChatServer(s, &groupChatServer{})
+	g := &groupChatServer{clients: map[gen.GroupChat_RefreshChatServer]struct{}{}, updates: make(chan string)}
+	gen.RegisterGroupChatServer(s, g)
+	go g.Broadcast()
+	go g.generateData()
 
 	// Start the gRPC server
 	fmt.Println("Starting gRPC server on port 50051...")
