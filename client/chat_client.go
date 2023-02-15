@@ -34,6 +34,9 @@ outer:
 		userCommand = userCommand[:len(userCommand)-1] // strip trailing '\n'
 
 		commandFields := strings.Fields(userCommand)
+		if len(commandFields) == 0 {
+			continue
+		}
 
 		switch commandFields[0] {
 		case "c":
@@ -51,7 +54,7 @@ outer:
 			}
 		case "u":
 			if strings.Compare(userName, commandFields[1]) != 0 {
-				userName = login(commandFields[1], groupName, client)
+				userName = login(commandFields[1], client)
 				groupName = ""
 			} else {
 				fmt.Println("User is already logged in as " + userName)
@@ -64,7 +67,7 @@ outer:
 				groupName = joinGroupChat(userName, groupName, newGroupName, client)
 			}
 		case "a":
-			message := userCommand[2:len(userCommand)]
+			message := userCommand[2 : len(userCommand)-1]
 			appendChat(userName, groupName, message, client)
 		case "l":
 			messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
@@ -106,15 +109,16 @@ func establishConnection(client gen.GroupChatClient, conn *grpc.ClientConn, addr
 	return client, conn
 }
 
-func login(userName, groupName string, client gen.GroupChatClient) string {
-	if userName == "" {
+func login(newUserName string, client gen.GroupChatClient) string {
+	if newUserName == "" {
 		fmt.Println("UserName cannot be empty. Please try again")
 		return ""
 	}
 
 	loginRequest := gen.LoginRequest{
-		UserName:  userName,
-		GroupName: groupName,
+		NewUserName:  newUserName,
+		OldUserName:  userName,
+		OldGroupName: groupName,
 	}
 
 	_, err := client.Login(context.Background(), &loginRequest)
@@ -124,7 +128,7 @@ func login(userName, groupName string, client gen.GroupChatClient) string {
 		fmt.Println("User logged in successfully")
 	}
 
-	return userName
+	return newUserName
 }
 
 func joinGroupChat(userName, oldGroupName, newGroupName string, client gen.GroupChatClient) string {
@@ -210,11 +214,24 @@ func printHistory(userName, groupName string, client gen.GroupChatClient) {
 		GroupName: groupName,
 	}
 
-	_, err := client.PrintHistory(context.Background(), &printHistoryRequest)
+	printHistoryResponse, err := client.PrintHistory(context.Background(), &printHistoryRequest)
 	if err != nil {
 		fmt.Println("Error occurred printing groupchat message history", err)
+		return
 	} else {
-		fmt.Println("Groupchat message history printed successfully")
+		fmt.Println("Group chat message history printed successfully")
+	}
+
+	fmt.Println("Group : " + printHistoryResponse.GroupName)
+	fmt.Print("Participants : ")
+	for userName := range printHistoryResponse.GroupData.Users {
+		fmt.Print(userName)
+	}
+	fmt.Println()
+	fmt.Println("Messages : ")
+	for messageID, message := range printHistoryResponse.GroupData.Messages {
+		fmt.Printf("%d. %s: %s\n", messageID, message.Owner, message.Message)
+		fmt.Println("Likes : ", len(message.Likes))
 	}
 
 }
@@ -227,10 +244,11 @@ func listenToGroupUpdates(stream gen.GroupChat_SubscribeToGroupUpdatesClient, cl
 			return
 		} else if err != nil {
 			log.Fatalf("stream to receive group chat updates failed: %v", err)
+			return
 		}
-		log.Printf("Received group updates for %s group with version %d",
+		fmt.Printf("Received group updates for %s group with version %d",
 			groupUpdates.GroupUpdated, groupUpdates.Version)
-		log.Println()
+		fmt.Println()
 
 		if strings.Compare(groupUpdates.GroupUpdated, groupName) == 0 && version <= groupUpdates.Version {
 			PrintGroupState(client)
@@ -261,8 +279,8 @@ func PrintGroupState(client gen.GroupChatClient) {
 	fmt.Println("Messages : ")
 	for messageID, message := range refreshChatResponse.GroupData.Messages {
 		fmt.Printf("%d. %s: %s\n", messageID, message.Owner, message.Message)
-		fmt.Println()
 		fmt.Println("Likes : ", len(message.Likes))
+		fmt.Println()
 	}
 
 	version = refreshChatResponse.GroupData.Version
