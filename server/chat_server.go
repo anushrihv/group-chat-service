@@ -59,11 +59,11 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 	_, ok := g.groupState[req.NewGroupName]
 	if ok {
 		// add the user to the existing group
-		addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
+		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
 	} else {
 		// create the group since it does not exist
-		createGroup(req.GetNewGroupName(), g.groupState)
-		addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
+		g.createGroup(req.GetNewGroupName(), g.groupState)
+		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
 	}
 
 	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
@@ -75,7 +75,7 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 If the user has already joined the chat from other clients, increase the client count
 Else set the clientCount to 1
 */
-func addUserToGroup(userName, groupName string, users map[string]int32) {
+func (g *groupChatServer) addUserToGroup(userName, groupName string, users map[string]int32) {
 	clientCount, ok := users[userName]
 	if ok {
 		clientCount++
@@ -83,6 +83,7 @@ func addUserToGroup(userName, groupName string, users map[string]int32) {
 	} else {
 		clientCount = 1
 		users[userName] = clientCount
+		g.groupUpdatesChan <- groupName
 	}
 
 	fmt.Printf("User %s added to the group %s with %d clients", userName, groupName, clientCount)
@@ -107,7 +108,7 @@ func removeUserFromGroup(userName, groupName string, g *groupChatServer) {
 	}
 }
 
-func createGroup(groupName string, groupState map[string]*gen.GroupData) {
+func (g *groupChatServer) createGroup(groupName string, groupState map[string]*gen.GroupData) {
 	groupData := &gen.GroupData{
 		Users:    make(map[string]int32),
 		Messages: make([]*gen.Message, 0),
@@ -139,19 +140,21 @@ func createMessage(userName, groupName, message string, g *groupChatServer) {
 		Likes:   make(map[string]bool),
 	}
 	g.groupState[groupName].Messages = append(g.groupState[groupName].Messages, messageObject)
+	g.groupUpdatesChan <- groupName
 	fmt.Println("Updated messages: ", g.groupState[groupName].Messages)
 }
 
 func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) (*gen.LikeChatResponse, error) {
-	groupchat, ok := g.groupState[req.GroupName]
+	groupChat, ok := g.groupState[req.GroupName]
 	if ok {
-		if req.UserName == groupchat.Messages[req.MessageId-1].Owner {
+		if req.UserName == groupChat.Messages[req.MessageId-1].Owner {
 			return nil, errors.New("cannot like your own message")
 		}
-		if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
+		if _, ok := groupChat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
 			return nil, errors.New("cannot like a message again")
 		}
-		groupchat.Messages[req.MessageId-1].Likes[req.UserName] = true
+		groupChat.Messages[req.MessageId-1].Likes[req.UserName] = true
+		// TODO if any of the last 10 messages were liked, do g.groupUpdatesChan <- groupName
 		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	}
 
@@ -163,6 +166,7 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 	if ok {
 		if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
 			delete(groupchat.Messages[req.MessageId-1].Likes, req.UserName)
+			// TODO if any of the last 10 messages were unliked, do g.groupUpdatesChan <- groupName
 			fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 		} else {
 			return nil, errors.New("cannot remove like from message not liked before")
@@ -253,7 +257,7 @@ func (g *groupChatServer) sendGroupUpdatesToClients() {
 	for {
 		groupUpdated := <-g.groupUpdatesChan
 		fmt.Println("group update received for group " + groupUpdated + ". Pushing the update to the clients")
-		//g.groupState[groupUpdated].Version = g.groupState[groupUpdated].Version + 1
+		g.groupState[groupUpdated].Version = g.groupState[groupUpdated].Version + 1
 		for client := range g.clients {
 			if err := client.Send(&gen.GroupUpdates{GroupUpdated: groupUpdated, Version: g.groupState[groupUpdated].Version}); err != nil {
 				fmt.Println("Failed to send group updates for group : "+groupUpdated, err)

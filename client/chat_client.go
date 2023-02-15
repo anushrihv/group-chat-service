@@ -219,7 +219,7 @@ func printHistory(userName, groupName string, client gen.GroupChatClient) {
 		fmt.Println("Error occurred printing groupchat message history", err)
 		return
 	} else {
-		fmt.Println("Groupchat message history printed successfully")
+		fmt.Println("Group chat message history printed successfully")
 	}
 
 	fmt.Println("Group : " + printHistoryResponse.GroupName)
