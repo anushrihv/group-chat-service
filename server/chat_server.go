@@ -195,7 +195,7 @@ func (g *groupChatServer) PrintHistory(_ context.Context, req *gen.PrintHistoryR
 	return &printHistoryResponse, nil
 }
 
-func (g *groupChatServer) RefreshChat(ctx context.Context, request *gen.RefreshChatRequest) (*gen.RefreshChatResponse, error) {
+func (g *groupChatServer) RefreshChat(_ context.Context, request *gen.RefreshChatRequest) (*gen.RefreshChatResponse, error) {
 	if !validateUser(request.UserName, request.GroupName, g) {
 		return nil, errors.New("user is not authorized to view this group's information")
 	}
