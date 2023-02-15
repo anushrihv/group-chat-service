@@ -216,7 +216,6 @@ func (g *groupChatServer) RefreshChat(_ context.Context, request *gen.RefreshCha
 	groupDataResponse := gen.GroupData{
 		Users:    groupData.Users,
 		Messages: messages,
-		Version:  groupData.Version,
 	}
 
 	refreshChatResponse := gen.RefreshChatResponse{
@@ -274,9 +273,8 @@ func (g *groupChatServer) sendGroupUpdatesToClients() {
 	for {
 		groupUpdated := <-g.groupUpdatesChan
 		fmt.Println("group update received for group " + groupUpdated + ". Pushing the update to the clients")
-		g.groupState[groupUpdated].Version = g.groupState[groupUpdated].Version + 1
 		for client := range g.clients {
-			if err := client.Send(&gen.GroupUpdates{GroupUpdated: groupUpdated, Version: g.groupState[groupUpdated].Version}); err != nil {
+			if err := client.Send(&gen.GroupUpdates{GroupUpdated: groupUpdated}); err != nil {
 				fmt.Println("Failed to send group updates for group : "+groupUpdated, err)
 			}
 		}

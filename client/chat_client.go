@@ -17,7 +17,6 @@ import (
 var client gen.GroupChatClient
 var conn *grpc.ClientConn
 var groupName, userName string
-var version int32 = 1
 
 func main() {
 
@@ -28,7 +27,13 @@ func main() {
 outer:
 	for {
 		// Read from keyboard
+		fmt.Println()
+		fmt.Println("*******************")
+		fmt.Println()
 		fmt.Println("Enter your command: ")
+		fmt.Println()
+		fmt.Println("*******************")
+		fmt.Println()
 		reader := bufio.NewReader(os.Stdin)
 		userCommand, _ := reader.ReadString('\n')
 		userCommand = userCommand[:len(userCommand)-1] // strip trailing '\n'
@@ -225,7 +230,7 @@ func printHistory(userName, groupName string, client gen.GroupChatClient) {
 	fmt.Println("Group : " + printHistoryResponse.GroupName)
 	fmt.Print("Participants : ")
 	for userName := range printHistoryResponse.GroupData.Users {
-		fmt.Print(userName)
+		fmt.Print(userName + ", ")
 	}
 	fmt.Println()
 	fmt.Println("Messages : ")
@@ -246,11 +251,9 @@ func listenToGroupUpdates(stream gen.GroupChat_SubscribeToGroupUpdatesClient, cl
 			log.Fatalf("stream to receive group chat updates failed: %v", err)
 			return
 		}
-		fmt.Printf("Received group updates for %s group with version %d",
-			groupUpdates.GroupUpdated, groupUpdates.Version)
-		fmt.Println()
+		fmt.Println("received group updates for group " + groupUpdates.GroupUpdated)
 
-		if strings.Compare(groupUpdates.GroupUpdated, groupName) == 0 && version <= groupUpdates.Version {
+		if strings.Compare(groupUpdates.GroupUpdated, groupName) == 0 {
 			PrintGroupState(client)
 		} else {
 			fmt.Println("ignoring group update")
@@ -283,5 +286,4 @@ func PrintGroupState(client gen.GroupChatClient) {
 		fmt.Println()
 	}
 
-	version = refreshChatResponse.GroupData.Version
 }

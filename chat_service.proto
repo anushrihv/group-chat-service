@@ -91,13 +91,11 @@ message Unsubscribe {
 
 message GroupUpdates {
   string group_updated = 1;
-  int32 version = 2;
 }
 
 message GroupData {
   map<string, int32> users = 1;
   repeated Message messages = 2;
-  int32 version = 3;
 }
 
 
