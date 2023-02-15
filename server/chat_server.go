@@ -120,9 +120,6 @@ func createGroup(groupName string, groupState map[string]*gen.GroupData) {
 
 func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatRequest) (*gen.AppendChatResponse, error) {
 	// get id of most recently added message
-	// TODO validate username & groupName are not empty.
-	// TODO Validate if user belongs to the group
-	// TODO everytime a message is appended, version should increase
 	_, ok := g.groupState[req.GroupName]
 
 	if ok {
