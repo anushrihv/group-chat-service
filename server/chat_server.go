@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"group-chat-service/gen"
 	"log"
 	"net"
@@ -120,8 +118,18 @@ func (g *groupChatServer) createGroup(groupName string, groupState map[string]*g
 }
 
 func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatRequest) (*gen.AppendChatResponse, error) {
+	if req.UserName == "" {
+		return nil, errors.New("UserName cannot be empty")
+	} else if req.GroupName == "" {
+		return nil, errors.New("new group name cannot be empty")
+	}
+
 	// get id of most recently added message
-	_, ok := g.groupState[req.GroupName]
+	groupchat, ok := g.groupState[req.GroupName]
+
+	if _, found := groupchat.Users[req.UserName]; !found {
+		return nil, errors.New("user doesn't belong to group")
+	}
 
 	if ok {
 		createMessage(req.UserName, req.GroupName, req.Message, g)
@@ -154,7 +162,9 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 			return nil, errors.New("cannot like a message again")
 		}
 		groupChat.Messages[req.MessageId-1].Likes[req.UserName] = true
-		// TODO if any of the last 10 messages were liked, do g.groupUpdatesChan <- groupName
+		if int(req.MessageId) < len(groupChat.Messages) && int(req.MessageId) >= len(groupChat.Messages)-10 {
+			g.groupUpdatesChan <- req.GroupName
+		}
 		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	}
 
@@ -166,7 +176,9 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 	if ok {
 		if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
 			delete(groupchat.Messages[req.MessageId-1].Likes, req.UserName)
-			// TODO if any of the last 10 messages were unliked, do g.groupUpdatesChan <- groupName
+			if int(req.MessageId) < len(groupchat.Messages) && int(req.MessageId) >= len(groupchat.Messages)-10 {
+				g.groupUpdatesChan <- req.GroupName
+			}
 			fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 		} else {
 			return nil, errors.New("cannot remove like from message not liked before")
@@ -175,11 +187,16 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 	return &gen.RemoveLikeResponse{}, nil
 }
 
-func (g *groupChatServer) PrintHistory(context.Context, *gen.PrintHistoryRequest) (*gen.PrintHistoryResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PrintHistory not implemented")
+func (g *groupChatServer) PrintHistory(_ context.Context, req *gen.PrintHistoryRequest) (*gen.PrintHistoryResponse, error) {
+	printHistoryResponse := gen.PrintHistoryResponse{
+		GroupName: req.GroupName,
+		GroupData: g.groupState[req.GroupName],
+	}
+
+	return &printHistoryResponse, nil
 }
 
-func (g *groupChatServer) RefreshChat(ctx context.Context, request *gen.RefreshChatRequest) (*gen.RefreshChatResponse, error) {
+func (g *groupChatServer) RefreshChat(_ context.Context, request *gen.RefreshChatRequest) (*gen.RefreshChatResponse, error) {
 	if !validateUser(request.UserName, request.GroupName, g) {
 		return nil, errors.New("user is not authorized to view this group's information")
 	}
