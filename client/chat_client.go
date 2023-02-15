@@ -17,7 +17,6 @@ import (
 var client gen.GroupChatClient
 var conn *grpc.ClientConn
 var groupName, userName string
-var version int32 = 1
 
 func main() {
 
@@ -28,7 +27,13 @@ func main() {
 outer:
 	for {
 		// Read from keyboard
+		fmt.Println()
+		fmt.Println("*******************")
+		fmt.Println()
 		fmt.Println("Enter your command: ")
+		fmt.Println()
+		fmt.Println("*******************")
+		fmt.Println()
 		reader := bufio.NewReader(os.Stdin)
 		userCommand, _ := reader.ReadString('\n')
 		userCommand = userCommand[:len(userCommand)-1] // strip trailing '\n'
@@ -56,6 +61,7 @@ outer:
 			if strings.Compare(userName, commandFields[1]) != 0 {
 				userName = login(commandFields[1], client)
 				groupName = ""
+				updateClientInformationOnServer(userName, groupName, stream)
 			} else {
 				fmt.Println("User is already logged in as " + userName)
 			}
@@ -65,6 +71,7 @@ outer:
 				fmt.Println("User has already joined the group " + newGroupName)
 			} else {
 				groupName = joinGroupChat(userName, groupName, newGroupName, client)
+				updateClientInformationOnServer(userName, newGroupName, stream)
 			}
 		case "a":
 			message := userCommand[2 : len(userCommand)-1]
@@ -225,12 +232,12 @@ func printHistory(userName, groupName string, client gen.GroupChatClient) {
 	fmt.Println("Group : " + printHistoryResponse.GroupName)
 	fmt.Print("Participants : ")
 	for userName := range printHistoryResponse.GroupData.Users {
-		fmt.Print(userName)
+		fmt.Print(userName + ", ")
 	}
 	fmt.Println()
 	fmt.Println("Messages : ")
-	for messageID, message := range printHistoryResponse.GroupData.Messages {
-		fmt.Printf("%d. %s: %s\n", messageID, message.Owner, message.Message)
+	for _, message := range printHistoryResponse.GroupData.Messages {
+		fmt.Printf("%d. %s: %s\n", message.MessageId, message.Owner, message.Message)
 		fmt.Println("Likes : ", len(message.Likes))
 	}
 
@@ -246,11 +253,11 @@ func listenToGroupUpdates(stream gen.GroupChat_SubscribeToGroupUpdatesClient, cl
 			log.Fatalf("stream to receive group chat updates failed: %v", err)
 			return
 		}
-		fmt.Printf("Received group updates for %s group with version %d",
-			groupUpdates.GroupUpdated, groupUpdates.Version)
 		fmt.Println()
+		fmt.Println("Received group updates for group " + groupUpdates.GroupUpdated)
+		fmt.Println("********************************")
 
-		if strings.Compare(groupUpdates.GroupUpdated, groupName) == 0 && version <= groupUpdates.Version {
+		if strings.Compare(groupUpdates.GroupUpdated, groupName) == 0 {
 			PrintGroupState(client)
 		} else {
 			fmt.Println("ignoring group update")
@@ -273,15 +280,26 @@ func PrintGroupState(client gen.GroupChatClient) {
 	fmt.Println("Group : " + refreshChatResponse.GroupName)
 	fmt.Print("Participants : ")
 	for userName := range refreshChatResponse.GroupData.Users {
-		fmt.Print(userName)
+		fmt.Print(userName + ", ")
 	}
 	fmt.Println()
 	fmt.Println("Messages : ")
-	for messageID, message := range refreshChatResponse.GroupData.Messages {
-		fmt.Printf("%d. %s: %s\n", messageID, message.Owner, message.Message)
+	for _, message := range refreshChatResponse.GroupData.Messages {
+		fmt.Printf("%d. %s: %s\n", message.MessageId, message.Owner, message.Message)
 		fmt.Println("Likes : ", len(message.Likes))
 		fmt.Println()
 	}
 
-	version = refreshChatResponse.GroupData.Version
+}
+
+func updateClientInformationOnServer(userName string, groupName string,
+	stream gen.GroupChat_SubscribeToGroupUpdatesClient) {
+	err := stream.Send(&gen.ClientInformation{
+		UserName:  userName,
+		GroupName: groupName,
+	})
+	if err != nil {
+		fmt.Println("failed to update the server with the client information for user name " + userName +
+			" and group name " + groupName)
+	}
 }
