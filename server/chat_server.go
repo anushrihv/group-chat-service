@@ -136,18 +136,39 @@ func createMessage(userName, groupName, message string, g *groupChatServer) {
 	messageObject := &gen.Message{
 		Message: message,
 		Owner:   userName,
-		Likes:   nil,
+		Likes:   make(map[string]bool),
 	}
 	g.groupState[groupName].Messages = append(g.groupState[groupName].Messages, messageObject)
 	fmt.Println("Updated messages: ", g.groupState[groupName].Messages)
 }
 
-func (g *groupChatServer) LikeChat(context.Context, *gen.LikeChatRequest) (*gen.LikeChatResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method LikeChat not implemented")
+func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) (*gen.LikeChatResponse, error) {
+	groupchat, ok := g.groupState[req.GroupName]
+	if ok {
+		if req.UserName == groupchat.Messages[req.MessageId-1].Owner {
+			return nil, errors.New("cannot like your own message")
+		}
+		if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
+			return nil, errors.New("cannot like a message again")
+		}
+		groupchat.Messages[req.MessageId-1].Likes[req.UserName] = true
+		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
+	}
+
+	return &gen.LikeChatResponse{}, nil
 }
 
-func (g *groupChatServer) RemoveLike(context.Context, *gen.RemoveLikeRequest) (*gen.RemoveLikeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RemoveLike not implemented")
+func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeRequest) (*gen.RemoveLikeResponse, error) {
+	groupchat, ok := g.groupState[req.GroupName]
+	if ok {
+		if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
+			delete(groupchat.Messages[req.MessageId-1].Likes, req.UserName)
+			fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
+		} else {
+			return nil, errors.New("cannot remove like from message not liked before")
+		}
+	}
+	return &gen.RemoveLikeResponse{}, nil
 }
 
 func (g *groupChatServer) PrintHistory(context.Context, *gen.PrintHistoryRequest) (*gen.PrintHistoryResponse, error) {

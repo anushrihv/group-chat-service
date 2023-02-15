@@ -67,7 +67,7 @@ outer:
 				groupName = joinGroupChat(userName, groupName, newGroupName, client)
 			}
 		case "a":
-			message := userCommand[2:len(userCommand)]
+			message := userCommand[2 : len(userCommand)-1]
 			appendChat(userName, groupName, message, client)
 		case "l":
 			messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
@@ -214,11 +214,24 @@ func printHistory(userName, groupName string, client gen.GroupChatClient) {
 		GroupName: groupName,
 	}
 
-	_, err := client.PrintHistory(context.Background(), &printHistoryRequest)
+	printHistoryResponse, err := client.PrintHistory(context.Background(), &printHistoryRequest)
 	if err != nil {
 		fmt.Println("Error occurred printing groupchat message history", err)
+		return
 	} else {
 		fmt.Println("Groupchat message history printed successfully")
+	}
+
+	fmt.Println("Group : " + printHistoryResponse.GroupName)
+	fmt.Print("Participants : ")
+	for userName := range printHistoryResponse.GroupData.Users {
+		fmt.Print(userName)
+	}
+	fmt.Println()
+	fmt.Println("Messages : ")
+	for messageID, message := range printHistoryResponse.GroupData.Messages {
+		fmt.Printf("%d. %s: %s\n", messageID, message.Owner, message.Message)
+		fmt.Println("Likes : ", len(message.Likes))
 	}
 
 }
