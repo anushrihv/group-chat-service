@@ -234,8 +234,8 @@ func printHistory(userName, groupName string, client gen.GroupChatClient) {
 	}
 	fmt.Println()
 	fmt.Println("Messages : ")
-	for messageID, message := range printHistoryResponse.GroupData.Messages {
-		fmt.Printf("%d. %s: %s\n", messageID, message.Owner, message.Message)
+	for _, message := range printHistoryResponse.GroupData.Messages {
+		fmt.Printf("%d. %s: %s\n", message.MessageId, message.Owner, message.Message)
 		fmt.Println("Likes : ", len(message.Likes))
 	}
 
@@ -280,8 +280,8 @@ func PrintGroupState(client gen.GroupChatClient) {
 	}
 	fmt.Println()
 	fmt.Println("Messages : ")
-	for messageID, message := range refreshChatResponse.GroupData.Messages {
-		fmt.Printf("%d. %s: %s\n", messageID, message.Owner, message.Message)
+	for _, message := range refreshChatResponse.GroupData.Messages {
+		fmt.Printf("%d. %s: %s\n", message.MessageId, message.Owner, message.Message)
 		fmt.Println("Likes : ", len(message.Likes))
 		fmt.Println()
 	}

@@ -142,10 +142,13 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 }
 
 func createMessage(userName, groupName, message string, g *groupChatServer) {
+	numberOfMessages := len(g.groupState[groupName].Messages)
+
 	messageObject := &gen.Message{
-		Message: message,
-		Owner:   userName,
-		Likes:   make(map[string]bool),
+		MessageId: int32(numberOfMessages + 1),
+		Message:   message,
+		Owner:     userName,
+		Likes:     make(map[string]bool),
 	}
 	g.groupState[groupName].Messages = append(g.groupState[groupName].Messages, messageObject)
 	g.groupUpdatesChan <- groupName
