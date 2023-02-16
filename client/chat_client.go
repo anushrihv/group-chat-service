@@ -295,6 +295,8 @@ func PrintGroupState(client gen.GroupChatClient) {
 
 func updateClientInformationOnServer(userName string, groupName string,
 	stream gen.GroupChat_SubscribeToGroupUpdatesClient) {
+	fmt.Println("updating client information on server with username " + userName + " and " +
+		"group name " + groupName)
 	err := stream.Send(&gen.ClientInformation{
 		UserName:  userName,
 		GroupName: groupName,
