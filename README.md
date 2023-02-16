@@ -6,6 +6,10 @@ protoc --go_out=gen --go_opt=paths=source_relative \
 ```
 # Docker Setup
 
+To build the image, run:
+```
+docker build . -t "group-chat-service"
+```
 To run a container using this image, run:
 ```
 docker run -it --name chatApp group-chat-service
