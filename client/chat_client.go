@@ -74,7 +74,10 @@ outer:
 				updateClientInformationOnServer(userName, newGroupName, stream)
 			}
 		case "a":
-			message := userCommand[2 : len(userCommand)-1]
+			message := userCommand[2:len(userCommand)]
+			if userCommand[len(userCommand)-1:] == "\r" {
+				message = userCommand[2 : len(userCommand)-1]
+			}
 			appendChat(userName, groupName, message, client)
 		case "l":
 			messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
@@ -223,10 +226,8 @@ func printHistory(userName, groupName string, client gen.GroupChatClient) {
 
 	printHistoryResponse, err := client.PrintHistory(context.Background(), &printHistoryRequest)
 	if err != nil {
-		fmt.Println("Error occurred printing groupchat message history", err)
+		fmt.Println("Error occurred while printing groupchat message history", err)
 		return
-	} else {
-		fmt.Println("Group chat message history printed successfully")
 	}
 
 	fmt.Println("Group : " + printHistoryResponse.GroupName)
