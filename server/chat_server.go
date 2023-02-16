@@ -120,7 +120,7 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 	if req.UserName == "" {
 		return nil, errors.New("UserName cannot be empty")
 	} else if req.GroupName == "" {
-		return nil, errors.New("new group name cannot be empty")
+		return nil, errors.New("group name cannot be empty")
 	}
 
 	// get id of most recently added message
@@ -152,7 +152,18 @@ func createMessage(userName, groupName, message string, g *groupChatServer) {
 }
 
 func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) (*gen.LikeChatResponse, error) {
+	if req.UserName == "" {
+		return nil, errors.New("UserName cannot be empty")
+	} else if req.GroupName == "" {
+		return nil, errors.New("group name cannot be empty")
+	}
 	groupchat, ok := g.groupState[req.GroupName]
+	if _, ok := groupchat.Users[req.UserName]; !ok {
+		return nil, errors.New("user does not belong to group")
+	}
+	if int(req.MessageId) > len(groupchat.Messages) || int(req.MessageId) < 0 {
+		return nil, errors.New("message index out of bounds")
+	}
 	if ok {
 		if req.UserName == groupchat.Messages[req.MessageId-1].Owner {
 			return nil, errors.New("cannot like your own message")
@@ -171,7 +182,18 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 }
 
 func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeRequest) (*gen.RemoveLikeResponse, error) {
+	if req.UserName == "" {
+		return nil, errors.New("UserName cannot be empty")
+	} else if req.GroupName == "" {
+		return nil, errors.New("group name cannot be empty")
+	}
 	groupchat, ok := g.groupState[req.GroupName]
+	if _, ok := groupchat.Users[req.UserName]; !ok {
+		return nil, errors.New("user does not belong to group")
+	}
+	if int(req.MessageId) > len(groupchat.Messages) || int(req.MessageId) < 0 {
+		return nil, errors.New("message index out of bounds")
+	}
 	if ok {
 		if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
 			delete(groupchat.Messages[req.MessageId-1].Likes, req.UserName)
