@@ -177,8 +177,6 @@ func appendChat(userName, groupName, message string, client gen.GroupChatClient)
 	_, err := client.AppendChat(context.Background(), &appendChatRequest)
 	if err != nil {
 		fmt.Println("Error occurred while appending message to groupchat", err)
-	} else {
-		fmt.Println("Message appended to groupchat successfully")
 	}
 
 }
@@ -194,8 +192,6 @@ func likeChat(userName, groupName string, messageId int32, client gen.GroupChatC
 	_, err := client.LikeChat(context.Background(), &likeChatRequest)
 	if err != nil {
 		fmt.Println("Error occurred while liking message", err)
-	} else {
-		fmt.Println("Liked messaged successfully")
 	}
 
 }
@@ -211,8 +207,6 @@ func removeLikeChat(userName, groupName string, messageId int32, client gen.Grou
 	_, err := client.RemoveLike(context.Background(), &removeLikeRequest)
 	if err != nil {
 		fmt.Println("Error occurred while removing like from message", err)
-	} else {
-		fmt.Println("Like removed from message successfully")
 	}
 
 }
@@ -254,14 +248,12 @@ func listenToGroupUpdates(stream gen.GroupChat_SubscribeToGroupUpdatesClient, cl
 			log.Fatalf("stream to receive group chat updates failed: %v", err)
 			return
 		}
-		fmt.Println()
-		fmt.Println("Received group updates for group " + groupUpdates.GroupUpdated)
-		fmt.Println("********************************")
 
 		if strings.Compare(groupUpdates.GroupUpdated, groupName) == 0 {
+			fmt.Println()
+			fmt.Println("Received group updates for group " + groupUpdates.GroupUpdated)
+			fmt.Println("********************************")
 			PrintGroupState(client)
-		} else {
-			fmt.Println("ignoring group update")
 		}
 	}
 }
@@ -274,7 +266,7 @@ func PrintGroupState(client gen.GroupChatClient) {
 
 	refreshChatResponse, err := client.RefreshChat(context.Background(), &refreshChatRequest)
 	if err != nil {
-		fmt.Println("Error occurred while refreshing chat ", err)
+		fmt.Println("Error occurred while refreshing chat ", err) // TODO remove
 		return
 	}
 

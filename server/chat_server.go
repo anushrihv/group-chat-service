@@ -199,7 +199,7 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 	groupChat.Messages[req.MessageId-1].Likes[req.UserName] = true
 	g.mu.Unlock()
 
-	if int(req.MessageId) < len(groupChat.Messages) && int(req.MessageId) >= len(groupChat.Messages)-10 {
+	if int(req.MessageId) <= len(groupChat.Messages) && int(req.MessageId) >= len(groupChat.Messages)-10 {
 		// If the user likes any of the last 10 messages then the client screen should be refreshed
 		g.groupUpdatesChan <- req.GroupName
 	}
@@ -227,16 +227,16 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 	}
 
 	g.mu.Lock()
+	defer g.mu.Unlock()
 	if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
 		delete(groupchat.Messages[req.MessageId-1].Likes, req.UserName)
-		if int(req.MessageId) < len(groupchat.Messages) && int(req.MessageId) >= len(groupchat.Messages)-10 {
+		if int(req.MessageId) <= len(groupchat.Messages) && int(req.MessageId) > len(groupchat.Messages)-10 {
 			g.groupUpdatesChan <- req.GroupName
 		}
 		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	} else {
 		return nil, errors.New("cannot remove like from message not liked before")
 	}
-	g.mu.Unlock()
 	return &gen.RemoveLikeResponse{}, nil
 }
 
