@@ -56,6 +56,7 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		}
 	}
 
+	g.mu.Lock()
 	_, ok := g.groupState[req.NewGroupName]
 	if ok {
 		// add the user to the existing group
@@ -65,6 +66,7 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		g.createGroup(req.GetNewGroupName(), g.groupState)
 		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
 	}
+	g.mu.Unlock()
 
 	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	return &gen.JoinChatResponse{}, nil
@@ -76,6 +78,8 @@ If the user has already joined the chat from other clients, increase the client 
 Else set the clientCount to 1
 */
 func (g *groupChatServer) addUserToGroup(userName, groupName string, users map[string]int32) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	clientCount, ok := users[userName]
 	if ok {
 		clientCount++
@@ -96,6 +100,8 @@ If the user has joined the chat via multiple clients, just reduce the clientCoun
 Else, remove the user from the group
 */
 func (g *groupChatServer) removeUserFromGroup(userName, groupName string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	groupData := g.groupState[groupName]
 	users := groupData.Users
 
@@ -116,9 +122,7 @@ func (g *groupChatServer) createGroup(groupName string, groupState map[string]*g
 		Messages: make([]*gen.Message, 0),
 	}
 
-	g.mu.Lock()
 	groupState[groupName] = groupData
-	g.mu.Unlock()
 	fmt.Println("Created group " + groupName)
 	fmt.Printf("groupState[%s]: %v\n", groupName, groupState[groupName])
 }
@@ -127,7 +131,7 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 	if req.UserName == "" {
 		return nil, errors.New("UserName cannot be empty")
 	} else if req.GroupName == "" {
-		return nil, errors.New("new group name cannot be empty")
+		return nil, errors.New("group name cannot be empty")
 	}
 
 	// get id of most recently added message
@@ -164,40 +168,73 @@ func createMessage(userName, groupName, message string, g *groupChatServer) {
 }
 
 func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) (*gen.LikeChatResponse, error) {
-	groupChat, ok := g.groupState[req.GroupName]
-	if ok {
-		if req.UserName == groupChat.Messages[req.MessageId-1].Owner {
-			return nil, errors.New("cannot like your own message")
-		}
-		if _, ok := groupChat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
-			return nil, errors.New("cannot like a message again")
-		}
-		g.mu.Lock()
-		groupChat.Messages[req.MessageId-1].Likes[req.UserName] = true
-		g.mu.Unlock()
-
-		if int(req.MessageId) < len(groupChat.Messages) && int(req.MessageId) >= len(groupChat.Messages)-10 {
-			g.groupUpdatesChan <- req.GroupName
-		}
-		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
+	if req.UserName == "" {
+		return nil, errors.New("UserName cannot be empty")
+	} else if req.GroupName == "" {
+		return nil, errors.New("group name cannot be empty")
 	}
+
+	groupChat, ok := g.groupState[req.GroupName]
+	if !ok {
+		return nil, errors.New("invalid group name")
+	}
+
+	if !validateUser(req.UserName, req.GroupName, g) {
+		return nil, errors.New("user is not authorized to view this group's information")
+	}
+
+	if int(req.MessageId) > len(groupChat.Messages) || int(req.MessageId) < 0 {
+		return nil, errors.New("message index out of bounds")
+	}
+
+	if req.UserName == groupChat.Messages[req.MessageId-1].Owner {
+		return nil, errors.New("cannot like your own message")
+	}
+	if _, ok := groupChat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
+		return nil, errors.New("cannot like a message again")
+	}
+	g.mu.Lock()
+	groupChat.Messages[req.MessageId-1].Likes[req.UserName] = true
+	g.mu.Unlock()
+
+	if int(req.MessageId) < len(groupChat.Messages) && int(req.MessageId) >= len(groupChat.Messages)-10 {
+		// If the user likes any of the last 10 messages then the client screen should be refreshed
+		g.groupUpdatesChan <- req.GroupName
+	}
+	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 
 	return &gen.LikeChatResponse{}, nil
 }
 
 func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeRequest) (*gen.RemoveLikeResponse, error) {
-	groupchat, ok := g.groupState[req.GroupName]
-	if ok {
-		if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
-			delete(groupchat.Messages[req.MessageId-1].Likes, req.UserName)
-			if int(req.MessageId) < len(groupchat.Messages) && int(req.MessageId) >= len(groupchat.Messages)-10 {
-				g.groupUpdatesChan <- req.GroupName
-			}
-			fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
-		} else {
-			return nil, errors.New("cannot remove like from message not liked before")
-		}
+	if req.UserName == "" {
+		return nil, errors.New("UserName cannot be empty")
+	} else if req.GroupName == "" {
+		return nil, errors.New("group name cannot be empty")
 	}
+
+	groupchat, ok := g.groupState[req.GroupName]
+	if !ok {
+		return nil, errors.New("invalid group name")
+	}
+	if _, ok = groupchat.Users[req.UserName]; !ok {
+		return nil, errors.New("user does not belong to group")
+	}
+	if int(req.MessageId) > len(groupchat.Messages) || int(req.MessageId) < 0 {
+		return nil, errors.New("message index out of bounds")
+	}
+
+	g.mu.Lock()
+	if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
+		delete(groupchat.Messages[req.MessageId-1].Likes, req.UserName)
+		if int(req.MessageId) < len(groupchat.Messages) && int(req.MessageId) >= len(groupchat.Messages)-10 {
+			g.groupUpdatesChan <- req.GroupName
+		}
+		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
+	} else {
+		return nil, errors.New("cannot remove like from message not liked before")
+	}
+	g.mu.Unlock()
 	return &gen.RemoveLikeResponse{}, nil
 }
 

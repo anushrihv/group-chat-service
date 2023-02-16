@@ -21,10 +21,10 @@ ENV PATH="$PATH:/root/go/bin"
 
 COPY . /app/group-chat-service/
 WORKDIR /app/group-chat-service
-RUN go mod init group-chat-service
+# RUN go mod init group-chat-service
 RUN go mod tidy
-RUN protoc --go_out=gen --go_opt=paths=source_relative \
-        --go-grpc_out=gen --go-grpc_opt=paths=source_relative chat_service.proto \
+RUN protoc --go_out=gen --go_opt=paths=source_relative --go-grpc_out=gen --go-grpc_opt=paths=source_relative chat_service.proto
 RUN go build client/chat_client.go
-RUN go build server/chat_service.go
+RUN go build server/chat_server.go
 ENTRYPOINT /bin/bash
+

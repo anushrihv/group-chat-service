@@ -74,7 +74,10 @@ outer:
 				updateClientInformationOnServer(userName, newGroupName, stream)
 			}
 		case "a":
-			message := userCommand[2 : len(userCommand)-1]
+			message := userCommand[2:len(userCommand)]
+			if userCommand[len(userCommand)-1:] == "\r" {
+				message = userCommand[2 : len(userCommand)-1]
+			}
 			appendChat(userName, groupName, message, client)
 		case "l":
 			messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
