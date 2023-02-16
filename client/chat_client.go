@@ -96,6 +96,7 @@ outer:
 		case "p":
 			printHistory(userName, groupName, client)
 		case "q":
+			fmt.Println("exiting client")
 			conn.Close()
 			client = nil
 			fmt.Println()

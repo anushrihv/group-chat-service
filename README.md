@@ -22,5 +22,22 @@ When you are done using the container, remove it with:
 ```
 docker rm chatApp
 ```
+# Supported user inputs
+
+`c hostname:port`: to establish a connection between the client and the server
+
+`u username`: to login
+
+`j groupname`: to join a group chat
+
+`a message`: to send a message to the group chat
+
+`l messageID`: to like an existing message
+
+`r messageID`: to remove the like on a message
+
+`p`: to print the group chat history
+
+`q`: to quit the client
 
 
