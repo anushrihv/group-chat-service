@@ -14,7 +14,7 @@ type groupChatServer struct {
 	gen.UnimplementedGroupChatServer
 	groupState       map[string]*gen.GroupData
 	groupUpdatesChan chan string
-	clients          map[gen.GroupChat_SubscribeToGroupUpdatesServer]bool
+	clients          map[gen.GroupChat_SubscribeToGroupUpdatesServer]*gen.ClientInformation
 }
 
 func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.LoginResponse, error) {
@@ -26,7 +26,7 @@ func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.
 		// Remove the user from the old group chat
 		_, ok := g.groupState[req.OldGroupName]
 		if ok {
-			removeUserFromGroup(req.OldUserName, req.OldGroupName, g)
+			g.removeUserFromGroup(req.OldUserName, req.OldGroupName)
 		} else {
 			// group not found. ideally should not happen. log and error and ignore
 			fmt.Println("User " + req.OldUserName + "'s old group " + req.OldGroupName + " not found!")
@@ -50,18 +50,18 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		_, ok := g.groupState[req.OldGroupName]
 		if ok {
 			fmt.Println("Client logged out from the old group chat " + req.OldGroupName)
-			removeUserFromGroup(req.GetUserName(), req.GetOldGroupName(), g)
+			g.removeUserFromGroup(req.GetUserName(), req.GetOldGroupName())
 		}
 	}
 
 	_, ok := g.groupState[req.NewGroupName]
 	if ok {
 		// add the user to the existing group
-		addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
+		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
 	} else {
 		// create the group since it does not exist
-		createGroup(req.GetNewGroupName(), g.groupState)
-		addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
+		g.createGroup(req.GetNewGroupName(), g.groupState)
+		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
 	}
 
 	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
@@ -73,7 +73,7 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 If the user has already joined the chat from other clients, increase the client count
 Else set the clientCount to 1
 */
-func addUserToGroup(userName, groupName string, users map[string]int32) {
+func (g *groupChatServer) addUserToGroup(userName, groupName string, users map[string]int32) {
 	clientCount, ok := users[userName]
 	if ok {
 		clientCount++
@@ -81,6 +81,7 @@ func addUserToGroup(userName, groupName string, users map[string]int32) {
 	} else {
 		clientCount = 1
 		users[userName] = clientCount
+		g.groupUpdatesChan <- groupName
 	}
 
 	fmt.Printf("User %s added to the group %s with %d clients", userName, groupName, clientCount)
@@ -92,20 +93,22 @@ func addUserToGroup(userName, groupName string, users map[string]int32) {
 If the user has joined the chat via multiple clients, just reduce the clientCount by 1.
 Else, remove the user from the group
 */
-func removeUserFromGroup(userName, groupName string, g *groupChatServer) {
+func (g *groupChatServer) removeUserFromGroup(userName, groupName string) {
 	groupData := g.groupState[groupName]
 	users := groupData.Users
 
 	clientCount := users[userName]
 	if clientCount == 1 {
 		delete(users, userName)
+		fmt.Println("removed user " + userName + " from group " + groupName)
 		g.groupUpdatesChan <- groupName
 	} else {
 		users[userName] = clientCount - 1
+		fmt.Println("reduced user client count for user " + userName + " from group " + groupName)
 	}
 }
 
-func createGroup(groupName string, groupState map[string]*gen.GroupData) {
+func (g *groupChatServer) createGroup(groupName string, groupState map[string]*gen.GroupData) {
 	groupData := &gen.GroupData{
 		Users:    make(map[string]int32),
 		Messages: make([]*gen.Message, 0),
@@ -141,13 +144,16 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 }
 
 func createMessage(userName, groupName, message string, g *groupChatServer) {
+	numberOfMessages := len(g.groupState[groupName].Messages)
+
 	messageObject := &gen.Message{
-		Message: message,
-		Owner:   userName,
-		Likes:   make(map[string]bool),
+		MessageId: int32(numberOfMessages + 1),
+		Message:   message,
+		Owner:     userName,
+		Likes:     make(map[string]bool),
 	}
 	g.groupState[groupName].Messages = append(g.groupState[groupName].Messages, messageObject)
-	g.groupState[groupName].Version++
+	g.groupUpdatesChan <- groupName
 	fmt.Println("Updated messages: ", g.groupState[groupName].Messages)
 }
 
@@ -157,23 +163,23 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 	} else if req.GroupName == "" {
 		return nil, errors.New("group name cannot be empty")
 	}
-	groupchat, ok := g.groupState[req.GroupName]
-	if _, ok := groupchat.Users[req.UserName]; !ok {
+	groupChat, ok := g.groupState[req.GroupName]
+	if _, ok := groupChat.Users[req.UserName]; !ok {
 		return nil, errors.New("user does not belong to group")
 	}
-	if int(req.MessageId) > len(groupchat.Messages) || int(req.MessageId) < 0 {
+	if int(req.MessageId) > len(groupChat.Messages) || int(req.MessageId) < 0 {
 		return nil, errors.New("message index out of bounds")
 	}
 	if ok {
-		if req.UserName == groupchat.Messages[req.MessageId-1].Owner {
+		if req.UserName == groupChat.Messages[req.MessageId-1].Owner {
 			return nil, errors.New("cannot like your own message")
 		}
-		if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
+		if _, ok := groupChat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
 			return nil, errors.New("cannot like a message again")
 		}
-		groupchat.Messages[req.MessageId-1].Likes[req.UserName] = true
-		if int(req.MessageId) < len(groupchat.Messages) && int(req.MessageId) >= len(groupchat.Messages)-10 {
-			g.groupState[req.GroupName].Version++
+		groupChat.Messages[req.MessageId-1].Likes[req.UserName] = true
+		if int(req.MessageId) < len(groupChat.Messages) && int(req.MessageId) >= len(groupChat.Messages)-10 {
+			g.groupUpdatesChan <- req.GroupName
 		}
 		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	}
@@ -198,7 +204,7 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 		if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
 			delete(groupchat.Messages[req.MessageId-1].Likes, req.UserName)
 			if int(req.MessageId) < len(groupchat.Messages) && int(req.MessageId) >= len(groupchat.Messages)-10 {
-				g.groupState[req.GroupName].Version++
+				g.groupUpdatesChan <- req.GroupName
 			}
 			fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 		} else {
@@ -237,7 +243,6 @@ func (g *groupChatServer) RefreshChat(_ context.Context, request *gen.RefreshCha
 	groupDataResponse := gen.GroupData{
 		Users:    groupData.Users,
 		Messages: messages,
-		Version:  groupData.Version,
 	}
 
 	refreshChatResponse := gen.RefreshChatResponse{
@@ -250,22 +255,34 @@ func (g *groupChatServer) RefreshChat(_ context.Context, request *gen.RefreshCha
 
 func (g *groupChatServer) SubscribeToGroupUpdates(stream gen.GroupChat_SubscribeToGroupUpdatesServer) error {
 	g.AddClient(stream)
-	defer g.RemoveClient(stream)
 
 	for {
-		_, err := stream.Recv()
-		if err != nil {
-			log.Printf("Error receiving message from client: %v\n", err)
-			break
+		select {
+		case <-stream.Context().Done():
+			clientInfo := g.clients[stream]
+			fmt.Println("stream to be removed : ", stream)
+			if clientInfo != nil {
+				g.removeUserFromGroup(clientInfo.UserName, clientInfo.GroupName)
+			}
+			g.RemoveClient(stream)
+			return nil
+		default:
+			clientInfo, err := stream.Recv()
+			if err != nil {
+				log.Printf("Error receiving message from client: %v\n", err)
+			} else {
+				g.clients[stream] = clientInfo
+			}
 		}
 	}
-
-	return nil
 }
 
 func (g *groupChatServer) AddClient(stream gen.GroupChat_SubscribeToGroupUpdatesServer) {
 	client := stream
-	g.clients[client] = true
+	g.clients[client] = &gen.ClientInformation{
+		UserName:  "",
+		GroupName: "",
+	}
 	log.Printf("Client added, total clients: %d\n", len(g.clients))
 }
 
@@ -295,9 +312,8 @@ func (g *groupChatServer) sendGroupUpdatesToClients() {
 	for {
 		groupUpdated := <-g.groupUpdatesChan
 		fmt.Println("group update received for group " + groupUpdated + ". Pushing the update to the clients")
-		//g.groupState[groupUpdated].Version = g.groupState[groupUpdated].Version + 1
 		for client := range g.clients {
-			if err := client.Send(&gen.GroupUpdates{GroupUpdated: groupUpdated, Version: g.groupState[groupUpdated].Version}); err != nil {
+			if err := client.Send(&gen.GroupUpdates{GroupUpdated: groupUpdated}); err != nil {
 				fmt.Println("Failed to send group updates for group : "+groupUpdated, err)
 			}
 		}
@@ -318,7 +334,7 @@ func main() {
 	srv := &groupChatServer{
 		groupState:       make(map[string]*gen.GroupData),
 		groupUpdatesChan: groupUpdatesChan,
-		clients:          make(map[gen.GroupChat_SubscribeToGroupUpdatesServer]bool),
+		clients:          make(map[gen.GroupChat_SubscribeToGroupUpdatesServer]*gen.ClientInformation),
 	}
 	gen.RegisterGroupChatServer(s, srv)
 	go srv.sendGroupUpdatesToClients()
