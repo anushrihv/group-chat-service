@@ -8,6 +8,7 @@ import (
 	"group-chat-service/gen"
 	"log"
 	"net"
+	"sync"
 )
 
 type groupChatServer struct {
@@ -15,6 +16,7 @@ type groupChatServer struct {
 	groupState       map[string]*gen.GroupData
 	groupUpdatesChan chan string
 	clients          map[gen.GroupChat_SubscribeToGroupUpdatesServer]*gen.ClientInformation
+	mu               sync.Mutex
 }
 
 func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.LoginResponse, error) {
@@ -114,7 +116,9 @@ func (g *groupChatServer) createGroup(groupName string, groupState map[string]*g
 		Messages: make([]*gen.Message, 0),
 	}
 
+	g.mu.Lock()
 	groupState[groupName] = groupData
+	g.mu.Unlock()
 	fmt.Println("Created group " + groupName)
 	fmt.Printf("groupState[%s]: %v\n", groupName, groupState[groupName])
 }
@@ -152,7 +156,9 @@ func createMessage(userName, groupName, message string, g *groupChatServer) {
 		Owner:     userName,
 		Likes:     make(map[string]bool),
 	}
+	g.mu.Lock()
 	g.groupState[groupName].Messages = append(g.groupState[groupName].Messages, messageObject)
+	g.mu.Unlock()
 	g.groupUpdatesChan <- groupName
 	fmt.Println("Updated messages: ", g.groupState[groupName].Messages)
 }
@@ -166,7 +172,10 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 		if _, ok := groupChat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
 			return nil, errors.New("cannot like a message again")
 		}
+		g.mu.Lock()
 		groupChat.Messages[req.MessageId-1].Likes[req.UserName] = true
+		g.mu.Unlock()
+
 		if int(req.MessageId) < len(groupChat.Messages) && int(req.MessageId) >= len(groupChat.Messages)-10 {
 			g.groupUpdatesChan <- req.GroupName
 		}
