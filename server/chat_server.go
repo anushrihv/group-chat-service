@@ -215,9 +215,27 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 }
 
 func (g *groupChatServer) PrintHistory(_ context.Context, req *gen.PrintHistoryRequest) (*gen.PrintHistoryResponse, error) {
+	if !validateUser(req.UserName, req.GroupName, g) {
+		return nil, errors.New("user is not authorized to view this group's information")
+	}
+
+	groupData := g.groupState[req.GroupName]
+	endIndex := len(groupData.Messages)
+	startIndex := 0
+
+	var messages []*gen.Message = nil
+	if len(groupData.Messages) > 0 {
+		messages = groupData.Messages[startIndex:endIndex]
+	}
+
+	groupDataResponse := gen.GroupData{
+		Users:    groupData.Users,
+		Messages: messages,
+	}
+
 	printHistoryResponse := gen.PrintHistoryResponse{
 		GroupName: req.GroupName,
-		GroupData: g.groupState[req.GroupName],
+		GroupData: &groupDataResponse,
 	}
 
 	return &printHistoryResponse, nil
