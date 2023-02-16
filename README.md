@@ -4,9 +4,9 @@ The following command generates client and server code in the `gen` folder
 protoc --go_out=gen --go_opt=paths=source_relative \
     --go-grpc_out=gen --go-grpc_opt=paths=source_relative chat_service.proto
 ```
-# Docker Setup
+# Running the Application
 
-To build the image, run:
+To build the image, run the following command from the application’s root directory:
 ```
 docker build . -t "group-chat-service"
 ```
@@ -14,14 +14,21 @@ To run a container using this image, run:
 ```
 docker run -it --name chatApp group-chat-service
 ```
-This command will give you an interactive bash shell on the container:
+To run the server program from the interactive terminal that was allocated by the previous command:
+```
+cd server
+go run chat_server.go
+```
+This command will give you an interactive bash shell on the container. Run this on separate terminals to run one or more clients:
 ```
 docker exec -it chatApp bash
 ```
-When you are done using the container, remove it with:
+To run the client program from the interactive terminal that was allocated by the previous command:
 ```
-docker rm chatApp
+cd client
+go run chat_client.go
 ```
+
 # Supported user inputs
 
 `c hostname:port`: to establish a connection between the client and the server
@@ -39,5 +46,3 @@ docker rm chatApp
 `p`: to print the group chat history
 
 `q`: to quit the client
-
-
