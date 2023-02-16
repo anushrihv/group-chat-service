@@ -78,8 +78,6 @@ If the user has already joined the chat from other clients, increase the client 
 Else set the clientCount to 1
 */
 func (g *groupChatServer) addUserToGroup(userName, groupName string, users map[string]int32) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
 	clientCount, ok := users[userName]
 	if ok {
 		clientCount++
@@ -102,7 +100,11 @@ Else, remove the user from the group
 func (g *groupChatServer) removeUserFromGroup(userName, groupName string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	groupData := g.groupState[groupName]
+	groupData, ok := g.groupState[groupName]
+	if !ok {
+		fmt.Println("invalid group name")
+		return
+	}
 	users := groupData.Users
 
 	clientCount := users[userName]
