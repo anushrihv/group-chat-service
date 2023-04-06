@@ -28,6 +28,8 @@ type GroupChatClient interface {
 	LikeChat(ctx context.Context, in *LikeChatRequest, opts ...grpc.CallOption) (*LikeChatResponse, error)
 	RemoveLike(ctx context.Context, in *RemoveLikeRequest, opts ...grpc.CallOption) (*RemoveLikeResponse, error)
 	PrintHistory(ctx context.Context, in *PrintHistoryRequest, opts ...grpc.CallOption) (*PrintHistoryResponse, error)
+	RefreshChat(ctx context.Context, in *RefreshChatRequest, opts ...grpc.CallOption) (*RefreshChatResponse, error)
+	SubscribeToGroupUpdates(ctx context.Context, opts ...grpc.CallOption) (GroupChat_SubscribeToGroupUpdatesClient, error)
 }
 
 type groupChatClient struct {
@@ -92,6 +94,46 @@ func (c *groupChatClient) PrintHistory(ctx context.Context, in *PrintHistoryRequ
 	return out, nil
 }
 
+func (c *groupChatClient) RefreshChat(ctx context.Context, in *RefreshChatRequest, opts ...grpc.CallOption) (*RefreshChatResponse, error) {
+	out := new(RefreshChatResponse)
+	err := c.cc.Invoke(ctx, "/GroupChat/RefreshChat", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *groupChatClient) SubscribeToGroupUpdates(ctx context.Context, opts ...grpc.CallOption) (GroupChat_SubscribeToGroupUpdatesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &GroupChat_ServiceDesc.Streams[0], "/GroupChat/SubscribeToGroupUpdates", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &groupChatSubscribeToGroupUpdatesClient{stream}
+	return x, nil
+}
+
+type GroupChat_SubscribeToGroupUpdatesClient interface {
+	Send(*ClientInformation) error
+	Recv() (*GroupUpdates, error)
+	grpc.ClientStream
+}
+
+type groupChatSubscribeToGroupUpdatesClient struct {
+	grpc.ClientStream
+}
+
+func (x *groupChatSubscribeToGroupUpdatesClient) Send(m *ClientInformation) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *groupChatSubscribeToGroupUpdatesClient) Recv() (*GroupUpdates, error) {
+	m := new(GroupUpdates)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // GroupChatServer is the server API for GroupChat service.
 // All implementations must embed UnimplementedGroupChatServer
 // for forward compatibility
@@ -102,6 +144,8 @@ type GroupChatServer interface {
 	LikeChat(context.Context, *LikeChatRequest) (*LikeChatResponse, error)
 	RemoveLike(context.Context, *RemoveLikeRequest) (*RemoveLikeResponse, error)
 	PrintHistory(context.Context, *PrintHistoryRequest) (*PrintHistoryResponse, error)
+	RefreshChat(context.Context, *RefreshChatRequest) (*RefreshChatResponse, error)
+	SubscribeToGroupUpdates(GroupChat_SubscribeToGroupUpdatesServer) error
 	mustEmbedUnimplementedGroupChatServer()
 }
 
@@ -126,6 +170,12 @@ func (UnimplementedGroupChatServer) RemoveLike(context.Context, *RemoveLikeReque
 }
 func (UnimplementedGroupChatServer) PrintHistory(context.Context, *PrintHistoryRequest) (*PrintHistoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrintHistory not implemented")
+}
+func (UnimplementedGroupChatServer) RefreshChat(context.Context, *RefreshChatRequest) (*RefreshChatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshChat not implemented")
+}
+func (UnimplementedGroupChatServer) SubscribeToGroupUpdates(GroupChat_SubscribeToGroupUpdatesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeToGroupUpdates not implemented")
 }
 func (UnimplementedGroupChatServer) mustEmbedUnimplementedGroupChatServer() {}
 
@@ -248,6 +298,50 @@ func _GroupChat_PrintHistory_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GroupChat_RefreshChat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshChatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GroupChatServer).RefreshChat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/GroupChat/RefreshChat",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GroupChatServer).RefreshChat(ctx, req.(*RefreshChatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GroupChat_SubscribeToGroupUpdates_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(GroupChatServer).SubscribeToGroupUpdates(&groupChatSubscribeToGroupUpdatesServer{stream})
+}
+
+type GroupChat_SubscribeToGroupUpdatesServer interface {
+	Send(*GroupUpdates) error
+	Recv() (*ClientInformation, error)
+	grpc.ServerStream
+}
+
+type groupChatSubscribeToGroupUpdatesServer struct {
+	grpc.ServerStream
+}
+
+func (x *groupChatSubscribeToGroupUpdatesServer) Send(m *GroupUpdates) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *groupChatSubscribeToGroupUpdatesServer) Recv() (*ClientInformation, error) {
+	m := new(ClientInformation)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // GroupChat_ServiceDesc is the grpc.ServiceDesc for GroupChat service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -279,7 +373,18 @@ var GroupChat_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "PrintHistory",
 			Handler:    _GroupChat_PrintHistory_Handler,
 		},
+		{
+			MethodName: "RefreshChat",
+			Handler:    _GroupChat_RefreshChat_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeToGroupUpdates",
+			Handler:       _GroupChat_SubscribeToGroupUpdates_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "chat_service.proto",
 }

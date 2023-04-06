@@ -9,11 +9,14 @@ service GroupChat {
   rpc LikeChat (LikeChatRequest) returns (LikeChatResponse) {}
   rpc RemoveLike (RemoveLikeRequest) returns (RemoveLikeResponse) {}
   rpc PrintHistory (PrintHistoryRequest) returns (PrintHistoryResponse) {}
+  rpc RefreshChat(RefreshChatRequest) returns (RefreshChatResponse) {}
+  rpc SubscribeToGroupUpdates(stream ClientInformation) returns (stream GroupUpdates) {}
 }
 
 message LoginRequest {
-  string user_name = 1;
-  string group_name = 2;
+  string old_user_name = 1;
+  string old_group_name = 2;
+  string new_user_name = 3;
 }
 
 message LoginResponse {
@@ -23,11 +26,10 @@ message LoginResponse {
 message JoinChatRequest {
   string new_group_name = 1;
   string old_group_name = 2;
-  string username = 3;
+  string user_name = 3;
 }
 
 message JoinChatResponse {
-  int32 count = 1;
 }
 
 
@@ -68,4 +70,38 @@ message PrintHistoryRequest {
 
 
 message PrintHistoryResponse {
+  string group_name = 1;
+  GroupData group_data = 2;
+}
+
+message RefreshChatRequest {
+  string user_name = 1;
+  string group_name = 2;
+}
+
+message RefreshChatResponse {
+  string group_name = 1;
+  GroupData group_data = 2;
+}
+
+message ClientInformation {
+  string user_name = 1;
+  string group_name = 2;
+}
+
+message GroupUpdates {
+  string group_updated = 1;
+}
+
+message GroupData {
+  map<string, int32> users = 1;
+  repeated Message messages = 2;
+}
+
+
+message Message {
+  int32 message_id = 1;
+  string message = 2;
+  string owner = 3;
+  map<string, bool> likes = 4;
 }
