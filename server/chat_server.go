@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"group-chat-service/gen"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 )
 
@@ -17,6 +19,7 @@ type groupChatServer struct {
 	groupUpdatesChan chan string
 	clients          map[gen.GroupChat_SubscribeToGroupUpdatesServer]*gen.ClientInformation
 	mu               sync.Mutex
+	messageOrderLock sync.Mutex
 }
 
 func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.LoginResponse, error) {
@@ -121,7 +124,7 @@ func (g *groupChatServer) removeUserFromGroup(userName, groupName string) {
 func (g *groupChatServer) createGroup(groupName string, groupState map[string]*gen.GroupData) {
 	groupData := &gen.GroupData{
 		Users:    make(map[string]int32),
-		Messages: make([]*gen.Message, 0),
+		Messages: make(map[string]*gen.Message),
 	}
 
 	groupState[groupName] = groupData
@@ -154,16 +157,17 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 }
 
 func createMessage(userName, groupName, message string, g *groupChatServer) {
-	numberOfMessages := len(g.groupState[groupName].Messages)
 
+	messageId := uuid.New().String()
 	messageObject := &gen.Message{
-		MessageId: int32(numberOfMessages + 1),
+		MessageId: messageId,
 		Message:   message,
 		Owner:     userName,
 		Likes:     make(map[string]bool),
 	}
 	g.mu.Lock()
-	g.groupState[groupName].Messages = append(g.groupState[groupName].Messages, messageObject)
+	g.groupState[groupName].Messages[messageId] = messageObject
+	g.groupState[groupName].MessageOrder = append(g.groupState[groupName].MessageOrder, messageId)
 	g.mu.Unlock()
 	g.groupUpdatesChan <- groupName
 	fmt.Println("Updated messages: ", g.groupState[groupName].Messages)
@@ -176,30 +180,29 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 		return nil, errors.New("group name cannot be empty")
 	}
 
+	g.messageOrderLock.Lock()
+	defer g.messageOrderLock.Unlock()
+
 	groupChat, ok := g.groupState[req.GroupName]
 	if !ok {
 		return nil, errors.New("invalid group name")
 	}
+	messageId := groupChat.MessageOrder[req.MessagePos]
 
+	// validate request
 	if !validateUser(req.UserName, req.GroupName, g) {
 		return nil, errors.New("user is not authorized to view this group's information")
-	}
-
-	if int(req.MessageId) > len(groupChat.Messages) || int(req.MessageId) < 0 {
+	} else if int(req.MessagePos) > len(groupChat.Messages) || int(req.MessagePos) < 0 {
 		return nil, errors.New("message index out of bounds")
-	}
-
-	if req.UserName == groupChat.Messages[req.MessageId-1].Owner {
+	} else if req.UserName == groupChat.Messages[messageId].Owner {
 		return nil, errors.New("cannot like your own message")
-	}
-	if _, ok := groupChat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
+	} else if _, ok := groupChat.Messages[messageId].Likes[req.UserName]; ok {
 		return nil, errors.New("cannot like a message again")
 	}
-	g.mu.Lock()
-	groupChat.Messages[req.MessageId-1].Likes[req.UserName] = true
-	g.mu.Unlock()
 
-	if int(req.MessageId) <= len(groupChat.Messages) && int(req.MessageId) >= len(groupChat.Messages)-10 {
+	groupChat.Messages[messageId].Likes[req.UserName] = true
+
+	if int(req.MessagePos) <= len(groupChat.Messages) && int(req.MessagePos) >= len(groupChat.Messages)-10 {
 		// If the user likes any of the last 10 messages then the client screen should be refreshed
 		g.groupUpdatesChan <- req.GroupName
 	}
@@ -215,22 +218,26 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 		return nil, errors.New("group name cannot be empty")
 	}
 
-	groupchat, ok := g.groupState[req.GroupName]
+	g.messageOrderLock.Lock()
+	defer g.messageOrderLock.Unlock()
+
+	groupChat, ok := g.groupState[req.GroupName]
 	if !ok {
 		return nil, errors.New("invalid group name")
 	}
-	if _, ok = groupchat.Users[req.UserName]; !ok {
+
+	messageId := groupChat.MessageOrder[req.MessagePos]
+
+	if _, ok = groupChat.Users[req.UserName]; !ok {
 		return nil, errors.New("user does not belong to group")
 	}
-	if int(req.MessageId) > len(groupchat.Messages) || int(req.MessageId) < 0 {
+	if int(req.MessagePos) > len(groupChat.Messages) || int(req.MessagePos) < 0 {
 		return nil, errors.New("message index out of bounds")
 	}
 
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if _, ok := groupchat.Messages[req.MessageId-1].Likes[req.UserName]; ok {
-		delete(groupchat.Messages[req.MessageId-1].Likes, req.UserName)
-		if int(req.MessageId) <= len(groupchat.Messages) && int(req.MessageId) > len(groupchat.Messages)-10 {
+	if _, ok := groupChat.Messages[messageId].Likes[req.UserName]; ok {
+		delete(groupChat.Messages[messageId].Likes, req.UserName)
+		if int(req.MessagePos) <= len(groupChat.Messages) && int(req.MessagePos) > len(groupChat.Messages)-10 {
 			g.groupUpdatesChan <- req.GroupName
 		}
 		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
@@ -246,17 +253,11 @@ func (g *groupChatServer) PrintHistory(_ context.Context, req *gen.PrintHistoryR
 	}
 
 	groupData := g.groupState[req.GroupName]
-	endIndex := len(groupData.Messages)
-	startIndex := 0
-
-	var messages []*gen.Message = nil
-	if len(groupData.Messages) > 0 {
-		messages = groupData.Messages[startIndex:endIndex]
-	}
 
 	groupDataResponse := gen.GroupData{
-		Users:    groupData.Users,
-		Messages: messages,
+		Users:        groupData.Users,
+		Messages:     groupData.Messages,
+		MessageOrder: groupData.MessageOrder,
 	}
 
 	printHistoryResponse := gen.PrintHistoryResponse{
@@ -279,15 +280,20 @@ func (g *groupChatServer) RefreshChat(_ context.Context, request *gen.RefreshCha
 		startIndex = endIndex - 10
 	}
 
-	var messages []*gen.Message = nil
-	if len(groupData.Messages) > 0 {
-		messages = groupData.Messages[startIndex:endIndex]
+	groupDataResponse := gen.GroupData{
+		Users: groupData.Users,
 	}
 
-	groupDataResponse := gen.GroupData{
-		Users:    groupData.Users,
-		Messages: messages,
+	groupDataResponse.Messages = make(map[string]*gen.Message)
+	for i := startIndex; i < endIndex; i++ {
+		messageId := groupData.MessageOrder[i]
+		message := groupData.Messages[messageId]
+		message.MessageId = strconv.Itoa(i) //we want to show message pos to user, rather than message UUID
+		groupDataResponse.Messages[messageId] = message
 	}
+
+	messageOrder := groupData.MessageOrder[startIndex:endIndex]
+	groupDataResponse.MessageOrder = messageOrder
 
 	refreshChatResponse := gen.RefreshChatResponse{
 		GroupName: request.GroupName,
