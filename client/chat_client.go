@@ -84,15 +84,15 @@ outer:
 			if err != nil {
 				fmt.Println("Invalid message id")
 			}
-			messageId := int32(messageId64)
-			likeChat(userName, groupName, messageId, client)
+			messagePos := int32(messageId64)
+			likeChat(userName, groupName, messagePos, client)
 		case "r":
 			messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
 			if err != nil {
 				fmt.Println("Invalid message id")
 			}
-			messageId := int32(messageId64)
-			removeLikeChat(userName, groupName, messageId, client)
+			messagePos := int32(messageId64)
+			removeLikeChat(userName, groupName, messagePos, client)
 		case "p":
 			printHistory(userName, groupName, client)
 		case "q":
@@ -182,12 +182,12 @@ func appendChat(userName, groupName, message string, client gen.GroupChatClient)
 
 }
 
-func likeChat(userName, groupName string, messageId int32, client gen.GroupChatClient) {
+func likeChat(userName, groupName string, messagePos int32, client gen.GroupChatClient) {
 
 	likeChatRequest := gen.LikeChatRequest{
-		UserName:  userName,
-		GroupName: groupName,
-		MessageId: messageId,
+		UserName:   userName,
+		GroupName:  groupName,
+		MessagePos: messagePos,
 	}
 
 	_, err := client.LikeChat(context.Background(), &likeChatRequest)
@@ -197,12 +197,12 @@ func likeChat(userName, groupName string, messageId int32, client gen.GroupChatC
 
 }
 
-func removeLikeChat(userName, groupName string, messageId int32, client gen.GroupChatClient) {
+func removeLikeChat(userName, groupName string, messagePos int32, client gen.GroupChatClient) {
 
 	removeLikeRequest := gen.RemoveLikeRequest{
-		UserName:  userName,
-		GroupName: groupName,
-		MessageId: messageId,
+		UserName:   userName,
+		GroupName:  groupName,
+		MessagePos: messagePos,
 	}
 
 	_, err := client.RemoveLike(context.Background(), &removeLikeRequest)
@@ -232,8 +232,9 @@ func printHistory(userName, groupName string, client gen.GroupChatClient) {
 	}
 	fmt.Println()
 	fmt.Println("Messages : ")
-	for _, message := range printHistoryResponse.GroupData.Messages {
-		fmt.Printf("%d. %s: %s\n", message.MessageId, message.Owner, message.Message)
+	for _, messageID := range printHistoryResponse.GroupData.MessageOrder {
+		message := printHistoryResponse.GroupData.Messages[messageID]
+		fmt.Printf("%s. %s: %s\n", message.MessageId, message.Owner, message.Message)
 		fmt.Println("Likes : ", len(message.Likes))
 	}
 
@@ -278,8 +279,9 @@ func PrintGroupState(client gen.GroupChatClient) {
 	}
 	fmt.Println()
 	fmt.Println("Messages : ")
-	for _, message := range refreshChatResponse.GroupData.Messages {
-		fmt.Printf("%d. %s: %s\n", message.MessageId, message.Owner, message.Message)
+	for _, messageID := range refreshChatResponse.GroupData.MessageOrder {
+		message := refreshChatResponse.GroupData.Messages[messageID]
+		fmt.Printf("%s. %s: %s\n", message.MessageId, message.Owner, message.Message)
 		fmt.Println("Likes : ", len(message.Likes))
 		fmt.Println()
 	}
