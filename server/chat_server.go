@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
@@ -10,6 +11,7 @@ import (
 	"group-chat-service/gen"
 	"log"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 )
@@ -21,6 +23,7 @@ type groupChatServer struct {
 	clients          map[gen.GroupChat_SubscribeToGroupUpdatesServer]*gen.ClientInformation
 	mu               sync.Mutex
 	messageOrderLock sync.Mutex
+	serverID         int32
 	allServers       []string
 	connectedServers map[int32]gen.GroupChatClient
 	updateServers    []string
@@ -74,9 +77,47 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
 	}
 	g.mu.Unlock()
+	err := g.persistGroupUser(g.groupState[req.NewGroupName].Users, req.NewGroupName)
+	if err != nil {
+		return &gen.JoinChatResponse{}, errors.New("Failed to persist user information for group " + req.NewGroupName)
+	}
+	//go g.updateJoinChatOnOtherServers(req)
 
 	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	return &gen.JoinChatResponse{}, nil
+}
+
+func (g *groupChatServer) persistGroupUser(users map[string]int32, groupName string) error {
+	fileName := "../data/" + groupName + "_users.json"
+
+	// convert user map to json
+	usersJson, err := json.Marshal(users)
+	if err != nil {
+		fmt.Println("Error while marshaling group user information", err)
+		return err
+	}
+
+	// write the user JSON to the file
+	err = os.WriteFile(fileName, usersJson, 0644)
+	if err != nil {
+		fmt.Println("Error while persisting user information for group "+groupName, err)
+		return err
+	}
+
+	return nil
+}
+
+func (g *groupChatServer) updateJoinChatOnOtherServers(joinChatRequest *gen.JoinChatRequest) {
+	for serverId, groupChatClient := range g.connectedServers {
+		_, err := groupChatClient.JoinChat(context.Background(), joinChatRequest)
+		if err != nil {
+			fmt.Println("Error updating group user information on serverId "+strconv.Itoa(int(serverId)), err)
+			// TODO save the update in the corresponding server’s file
+		} else {
+			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverId)) + " about user " +
+				joinChatRequest.UserName + " joining group " + joinChatRequest.NewGroupName)
+		}
+	}
 }
 
 /*
@@ -387,7 +428,24 @@ func healthcheck(serverID int32, address string) {
 		//connectedServers[serverID]
 		//}
 	}
+}
 
+func (g *groupChatServer) initializeAllServers() {
+	g.allServers = []string{"localhost:50051", "localhost:50052", "localhost:50053", "localhost:50054", "localhost:50055"}
+	g.connectedServers = make(map[int32]gen.GroupChatClient)
+
+	// TODO for testing multiple servers use case. Remove after testing done
+	if g.serverID == 1 {
+		conn, err := grpc.Dial(g.allServers[1], grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Fatal("dialing:", err)
+		}
+		g.connectedServers[2] = gen.NewGroupChatClient(conn)
+		fmt.Println("Connection with server 2 established successfully")
+	}
+	// till here
+
+	g.updateServers = make([]string, 0)
 }
 
 func main() {
@@ -400,14 +458,18 @@ func main() {
 	// Create a new gRPC server instance
 	s := grpc.NewServer()
 	groupUpdatesChan := make(chan string)
+	args := os.Args
+	serverId, _ := strconv.ParseInt(args[2], 10, 32)
 	// Register your server implementation with the gRPC server
 	srv := &groupChatServer{
 		groupState:       make(map[string]*gen.GroupData),
 		groupUpdatesChan: groupUpdatesChan,
 		clients:          make(map[gen.GroupChat_SubscribeToGroupUpdatesServer]*gen.ClientInformation),
+		serverID:         int32(serverId),
 	}
 	gen.RegisterGroupChatServer(s, srv)
 	go srv.sendGroupUpdatesToClients()
+	srv.initializeAllServers()
 
 	// Start the gRPC server
 	fmt.Println("Starting gRPC server on port 50051...")
