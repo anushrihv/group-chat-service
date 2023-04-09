@@ -11,6 +11,7 @@ service GroupChat {
   rpc PrintHistory (PrintHistoryRequest) returns (PrintHistoryResponse) {}
   rpc RefreshChat(RefreshChatRequest) returns (RefreshChatResponse) {}
   rpc SubscribeToGroupUpdates(stream ClientInformation) returns (stream GroupUpdates) {}
+  rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse) {}
 }
 
 message LoginRequest {
@@ -82,6 +83,14 @@ message RefreshChatRequest {
 message RefreshChatResponse {
   string group_name = 1;
   GroupData group_data = 2;
+}
+
+message HealthCheckRequest {
+
+}
+
+message HealthCheckResponse {
+
 }
 
 message ClientInformation {
