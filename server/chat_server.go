@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"group-chat-service/gen"
 	"log"
 	"net"
@@ -20,6 +21,9 @@ type groupChatServer struct {
 	clients          map[gen.GroupChat_SubscribeToGroupUpdatesServer]*gen.ClientInformation
 	mu               sync.Mutex
 	messageOrderLock sync.Mutex
+	allServers       []string
+	connectedServers map[int32]gen.GroupChatClient
+	updateServers    []string
 }
 
 func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.LoginResponse, error) {
@@ -368,6 +372,22 @@ func (g *groupChatServer) sendGroupUpdatesToClients() {
 			}
 		}
 	}
+}
+
+func healthcheck(serverID int32, address string) {
+	var err error
+
+	_, err = grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		//delete(connectedServers, serverID)
+	} else {
+		fmt.Println("Server %d connected to Server %d", serverID, serverID)
+		//_, ok := connectedServers[serverID]
+		//if !ok {
+		//connectedServers[serverID]
+		//}
+	}
+
 }
 
 func main() {
