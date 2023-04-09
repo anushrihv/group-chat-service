@@ -8,10 +8,12 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"group-chat-service/gen"
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -63,7 +65,10 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		_, ok := g.groupState[req.OldGroupName]
 		if ok {
 			fmt.Println("Client logged out from the old group chat " + req.OldGroupName)
-			g.removeUserFromGroup(req.GetUserName(), req.GetOldGroupName())
+			err := g.removeUserFromGroup(req.GetUserName(), req.GetOldGroupName())
+			if err != nil {
+				return &gen.JoinChatResponse{}, err
+			}
 		}
 	}
 
@@ -78,8 +83,12 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
 	}
 	g.mu.Unlock()
-	err := g.persistGroupUser(g.groupState[req.NewGroupName].Users, req.NewGroupName)
+
+	// persist user information on file
+	fileName := "../data/" + req.NewGroupName + "/users.json"
+	err := g.persistDataOnFile(fileName, g.groupState[req.NewGroupName].Users)
 	if err != nil {
+		fmt.Println("Failed to persist group user information for group "+req.NewGroupName, err)
 		return &gen.JoinChatResponse{}, errors.New("Failed to persist user information for group " + req.NewGroupName)
 	}
 	//go g.updateJoinChatOnOtherServers(req)
@@ -146,13 +155,13 @@ func (g *groupChatServer) addUserToGroup(userName, groupName string, users map[s
 If the user has joined the chat via multiple clients, just reduce the clientCount by 1.
 Else, remove the user from the group
 */
-func (g *groupChatServer) removeUserFromGroup(userName, groupName string) {
+func (g *groupChatServer) removeUserFromGroup(userName, groupName string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	groupData, ok := g.groupState[groupName]
 	if !ok {
 		fmt.Println("invalid group name")
-		return
+		return nil
 	}
 	users := groupData.Users
 
@@ -165,6 +174,16 @@ func (g *groupChatServer) removeUserFromGroup(userName, groupName string) {
 		users[userName] = clientCount - 1
 		fmt.Println("reduced user client count for user " + userName + " from group " + groupName)
 	}
+
+	// persist user information on file
+	fileName := "../data/" + groupName + "/users.json"
+	err := g.persistDataOnFile(fileName, g.groupState[groupName].Users)
+	if err != nil {
+		fmt.Println("Failed to persist group user information for group "+groupName, err)
+		return err
+	}
+
+	return nil
 }
 
 func (g *groupChatServer) createGroup(groupName string, groupState map[string]*gen.GroupData) {
@@ -183,12 +202,14 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 		return nil, errors.New("UserName cannot be empty")
 	} else if req.GroupName == "" {
 		return nil, errors.New("group name cannot be empty")
+	} else if req.MessageId != "" {
+		return nil, nil
 	}
 
-	// get id of most recently added message
-	groupchat, ok := g.groupState[req.GroupName]
+	// check if the user belongs to the group
+	groupData, ok := g.groupState[req.GroupName]
 
-	if _, found := groupchat.Users[req.UserName]; !found {
+	if _, found := groupData.Users[req.UserName]; !found {
 		return nil, errors.New("user doesn't belong to group")
 	}
 
@@ -203,20 +224,105 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 }
 
 func createMessage(userName, groupName, message string, g *groupChatServer) {
-
+	// update messages in memory
 	messageId := uuid.New().String()
 	messageObject := &gen.Message{
 		MessageId: messageId,
 		Message:   message,
 		Owner:     userName,
 		Likes:     make(map[string]bool),
+		Timestamp: timestamppb.New(time.Now()),
 	}
 	g.mu.Lock()
 	g.groupState[groupName].Messages[messageId] = messageObject
-	g.groupState[groupName].MessageOrder = append(g.groupState[groupName].MessageOrder, messageId)
+	g.appendMessageInOrder(g.groupState[groupName].MessageOrder, messageObject, groupName)
 	g.mu.Unlock()
+
+	// persist the message
+	fileName := "../data/" + groupName + "/messages/" + messageId + ".json"
+	err := g.persistDataOnFile(fileName, messageObject)
+	if err != nil {
+		fmt.Println("Failed to persist message "+messageId, err)
+		return
+	}
+
+	// update clients
 	g.groupUpdatesChan <- groupName
 	fmt.Println("Updated messages: ", g.groupState[groupName].Messages)
+}
+
+func (g *groupChatServer) persistDataOnFile(fileName string, obj interface{}) error {
+	// Create directories if they don't exist
+	err := os.MkdirAll(filepath.Dir(fileName), os.ModePerm)
+	if err != nil {
+		fmt.Println("Failed to create directory "+filepath.Dir(fileName), err)
+		return err
+	}
+
+	// convert user map to json
+	usersJson, err := json.Marshal(obj)
+	if err != nil {
+		fmt.Println("Error while marshaling group user information", err)
+		return err
+	}
+
+	// write the user JSON to the file
+	err = os.WriteFile(fileName, usersJson, 0644)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (g *groupChatServer) appendMessageInOrder(messageOrder []string, newMessage *gen.Message, groupName string) {
+	g.messageOrderLock.Lock()
+	defer g.messageOrderLock.Unlock()
+
+	n := len(messageOrder)
+
+	// compare the timestamps of the messages
+	i := n - 1
+	for ; i >= 0; i-- {
+		messageID := messageOrder[i]
+		message := g.groupState[groupName].Messages[messageID]
+
+		val := g.compare(message.Timestamp, newMessage.Timestamp)
+
+		if val == 0 || val == -1 {
+			break
+		}
+	}
+
+	// append the new message ordered by timestamps
+	newMessageOrder := append(messageOrder[0:i+1], newMessage.MessageId)
+
+	if i < n-1 {
+		newMessageOrder = append(newMessageOrder, messageOrder[i+1:n]...)
+	}
+
+	g.groupState[groupName].MessageOrder = newMessageOrder
+
+	// persist the message order
+	fileName := "../data/" + groupName + "/messageOrder.json"
+	err := g.persistDataOnFile(fileName, newMessageOrder)
+	if err != nil {
+		fmt.Println("Failed to persist message order ", err)
+		return
+	}
+}
+
+func (g *groupChatServer) compare(timestamp1, timestamp2 *timestamppb.Timestamp) int {
+	ns1 := timestamp1.GetSeconds()*1e9 + int64(timestamp1.GetNanos())
+	ns2 := timestamp2.GetSeconds()*1e9 + int64(timestamp2.GetNanos())
+
+	if ns1 > ns2 {
+		return 1
+	} else if ns1 < ns2 {
+		return -1
+	} else {
+		return 0
+	}
 }
 
 func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) (*gen.LikeChatResponse, error) {
