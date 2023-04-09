@@ -62,7 +62,10 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		_, ok := g.groupState[req.OldGroupName]
 		if ok {
 			fmt.Println("Client logged out from the old group chat " + req.OldGroupName)
-			g.removeUserFromGroup(req.GetUserName(), req.GetOldGroupName())
+			err := g.removeUserFromGroup(req.GetUserName(), req.GetOldGroupName())
+			if err != nil {
+				return &gen.JoinChatResponse{}, err
+			}
 		}
 	}
 
@@ -145,13 +148,13 @@ func (g *groupChatServer) addUserToGroup(userName, groupName string, users map[s
 If the user has joined the chat via multiple clients, just reduce the clientCount by 1.
 Else, remove the user from the group
 */
-func (g *groupChatServer) removeUserFromGroup(userName, groupName string) {
+func (g *groupChatServer) removeUserFromGroup(userName, groupName string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	groupData, ok := g.groupState[groupName]
 	if !ok {
 		fmt.Println("invalid group name")
-		return
+		return nil
 	}
 	users := groupData.Users
 
@@ -164,6 +167,14 @@ func (g *groupChatServer) removeUserFromGroup(userName, groupName string) {
 		users[userName] = clientCount - 1
 		fmt.Println("reduced user client count for user " + userName + " from group " + groupName)
 	}
+
+	err := g.persistGroupUser(g.groupState[groupName].Users, groupName)
+	if err != nil {
+		fmt.Println("Failed to persist group user information for group "+groupName, err)
+		return err
+	}
+
+	return nil
 }
 
 func (g *groupChatServer) createGroup(groupName string, groupState map[string]*gen.GroupData) {
