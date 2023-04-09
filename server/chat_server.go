@@ -471,6 +471,10 @@ func (g *groupChatServer) initializeAllServers() {
 	g.updateServers = make([]string, 0)
 }
 
+func createUpdateFiles() {
+
+}
+
 func main() {
 	// Create a TCP listener
 	lis, err := net.Listen("tcp", "localhost:50052")

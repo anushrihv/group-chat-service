@@ -28,6 +28,7 @@ message JoinChatRequest {
   string new_group_name = 1;
   string old_group_name = 2;
   string user_name = 3;
+  REQUEST_TYPE request_type = 4;
 }
 
 message JoinChatResponse {
@@ -38,6 +39,7 @@ message AppendChatRequest {
   string user_name = 1;
   string group_name = 2;
   string message = 3;
+  REQUEST_TYPE request_type = 4;
 }
 
 message AppendChatResponse {
@@ -48,6 +50,7 @@ message LikeChatRequest {
   string user_name = 1;
   string group_name = 2;
   int32 message_pos = 3;
+  REQUEST_TYPE request_type = 4;
 }
 
 
@@ -58,6 +61,7 @@ message RemoveLikeRequest {
   string user_name = 1;
   string group_name = 2;
   int32 message_pos = 3;
+  REQUEST_TYPE request_type = 4;
 }
 
 message RemoveLikeResponse {
@@ -115,3 +119,11 @@ message Message {
   string owner = 3;
   map<string, bool> likes = 4;
 }
+
+enum REQUEST_TYPE{
+  JOIN_CHAT = 0;
+  APPEND = 1;
+  LIKE = 2;
+  UNLIKE = 3;
+}
+
