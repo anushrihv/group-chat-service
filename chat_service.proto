@@ -2,6 +2,8 @@ syntax = "proto3";
 
 option go_package = "group_chat_service/gen";
 
+import "google/protobuf/timestamp.proto";
+
 service GroupChat {
   rpc Login (LoginRequest) returns (LoginResponse) {}
   rpc JoinChat (JoinChatRequest) returns (JoinChatResponse) {}
@@ -37,6 +39,7 @@ message AppendChatRequest {
   string user_name = 1;
   string group_name = 2;
   string message = 3;
+  string message_id = 4;
 }
 
 message AppendChatResponse {
@@ -105,4 +108,5 @@ message Message {
   string message = 2;
   string owner = 3;
   map<string, bool> likes = 4;
+  google.protobuf.Timestamp timestamp = 5;
 }
