@@ -424,24 +424,23 @@ func (g *groupChatServer) healthcheckCall() {
 				var conn *grpc.ClientConn
 				var client gen.GroupChatClient
 
-				conn, _ = grpc.Dial(g.allServers[i], grpc.WithTransportCredentials(insecure.NewCredentials()))
 				client, ok := g.connectedServers[int32(i+1)]
 				if !ok {
+					conn, _ = grpc.Dial(g.allServers[i], grpc.WithTransportCredentials(insecure.NewCredentials()))
 					client = gen.NewGroupChatClient(conn)
 				}
 				_, err = client.HealthCheck(context.Background(), &gen.HealthCheckRequest{})
 				if err != nil {
 					fmt.Printf("Server not able to connect to Server %d\n", i+1)
-					delete(g.connectedServers, int32(i+1))
+					if _, ok := g.connectedServers[int32(i+1)]; ok {
+						delete(g.connectedServers, int32(i+1))
+					}
 					fmt.Println("map:", g.connectedServers)
 				} else {
 					fmt.Printf("Server connected to Server %d\n", i+1)
-					_, ok := g.connectedServers[int32(i+1)]
-					if !ok {
-						g.connectedServers[int32(i+1)] = client
-						fmt.Printf("Added server %d to connectedServers map\n", i+1)
-						fmt.Println("map:", g.connectedServers)
-					}
+					g.connectedServers[int32(i+1)] = client
+					fmt.Printf("Added server %d to connectedServers map\n", i+1)
+					fmt.Println("map:", g.connectedServers)
 				}
 			}
 		}
