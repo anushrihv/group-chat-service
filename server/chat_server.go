@@ -546,27 +546,68 @@ func (g *groupChatServer) sendGroupUpdatesToClients() {
 	}
 }
 
+func (g *groupChatServer) healthcheckCall() {
+	for {
+		for i := 0; i < 5; i++ {
+			if int32(i+1) != g.serverID {
+				var err error
+				var conn *grpc.ClientConn
+				var client gen.GroupChatClient
+
+				client, ok := g.connectedServers[int32(i+1)]
+				if !ok {
+					conn, _ = grpc.Dial(g.allServers[i], grpc.WithTransportCredentials(insecure.NewCredentials()))
+					client = gen.NewGroupChatClient(conn)
+				}
+				_, err = client.HealthCheck(context.Background(), &gen.HealthCheckRequest{})
+				if err != nil {
+					fmt.Printf("Server not able to connect to Server %d\n", i+1)
+					if _, ok := g.connectedServers[int32(i+1)]; ok {
+						delete(g.connectedServers, int32(i+1))
+					}
+					fmt.Println("map:", g.connectedServers)
+				} else {
+					fmt.Printf("Server connected to Server %d\n", i+1)
+					g.connectedServers[int32(i+1)] = client
+					fmt.Printf("Added server %d to connectedServers map\n", i+1)
+					fmt.Println("map:", g.connectedServers)
+				}
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func (g *groupChatServer) HealthCheck(_ context.Context, request *gen.HealthCheckRequest) (*gen.HealthCheckResponse, error) {
+	fmt.Printf("\n***Entered HealthCheck function***\n\n")
+	return &gen.HealthCheckResponse{}, nil
+}
+
 func (g *groupChatServer) initializeAllServers() {
 	g.allServers = []string{"localhost:50051", "localhost:50052", "localhost:50053", "localhost:50054", "localhost:50055"}
 	g.connectedServers = make(map[int32]gen.GroupChatClient)
 
 	// TODO for testing multiple servers use case. Remove after testing done
-	if g.serverID == 1 {
-		conn, err := grpc.Dial(g.allServers[1], grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			log.Fatal("dialing:", err)
-		}
-		g.connectedServers[2] = gen.NewGroupChatClient(conn)
-		fmt.Println("Connection with server 2 established successfully")
-	}
+	//if g.serverID == 1 {
+	//	conn, err := grpc.Dial(g.allServers[1], grpc.WithTransportCredentials(insecure.NewCredentials()))
+	//	if err != nil {
+	//		log.Fatal("dialing:", err)
+	//	}
+	//	g.connectedServers[2] = gen.NewGroupChatClient(conn)
+	//	fmt.Println("Connection with server 2 established successfully")
+	//}
 	// till here
 
 	g.updateServers = make([]string, 0)
 }
 
+func createUpdateFiles() {
+
+}
+
 func main() {
 	// Create a TCP listener
-	lis, err := net.Listen("tcp", "localhost:50051")
+	lis, err := net.Listen("tcp", "localhost:50052")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -575,7 +616,7 @@ func main() {
 	s := grpc.NewServer()
 	groupUpdatesChan := make(chan string)
 	args := os.Args
-	serverId, _ := strconv.ParseInt(args[2], 10, 32)
+	serverId, _ := strconv.ParseInt(args[1], 10, 32)
 	// Register your server implementation with the gRPC server
 	srv := &groupChatServer{
 		groupState:       make(map[string]*gen.GroupData),
@@ -586,6 +627,7 @@ func main() {
 	gen.RegisterGroupChatServer(s, srv)
 	go srv.sendGroupUpdatesToClients()
 	srv.initializeAllServers()
+	go srv.healthcheckCall()
 
 	// Start the gRPC server
 	fmt.Println("Starting gRPC server on port 50051...")

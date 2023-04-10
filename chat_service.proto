@@ -13,6 +13,7 @@ service GroupChat {
   rpc PrintHistory (PrintHistoryRequest) returns (PrintHistoryResponse) {}
   rpc RefreshChat(RefreshChatRequest) returns (RefreshChatResponse) {}
   rpc SubscribeToGroupUpdates(stream ClientInformation) returns (stream GroupUpdates) {}
+  rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse) {}
 }
 
 message LoginRequest {
@@ -30,7 +31,8 @@ message JoinChatRequest {
   string new_group_name = 1;
   string old_group_name = 2;
   string user_name = 3;
-  string client_id = 4;
+  REQUEST_TYPE request_type = 4;
+  string client_id = 5;
 }
 
 message JoinChatResponse {
@@ -42,6 +44,7 @@ message AppendChatRequest {
   string group_name = 2;
   string message = 3;
   string message_id = 4;
+  REQUEST_TYPE request_type = 5;
 }
 
 message AppendChatResponse {
@@ -52,6 +55,7 @@ message LikeChatRequest {
   string user_name = 1;
   string group_name = 2;
   int32 message_pos = 3;
+  REQUEST_TYPE request_type = 4;
 }
 
 
@@ -62,6 +66,7 @@ message RemoveLikeRequest {
   string user_name = 1;
   string group_name = 2;
   int32 message_pos = 3;
+  REQUEST_TYPE request_type = 4;
 }
 
 message RemoveLikeResponse {
@@ -87,6 +92,14 @@ message RefreshChatRequest {
 message RefreshChatResponse {
   string group_name = 1;
   GroupData group_data = 2;
+}
+
+message HealthCheckRequest {
+
+}
+
+message HealthCheckResponse {
+
 }
 
 message ClientInformation {
@@ -116,3 +129,11 @@ message Message {
   map<string, bool> likes = 4;
   google.protobuf.Timestamp timestamp = 5;
 }
+
+enum REQUEST_TYPE{
+  JOIN_CHAT = 0;
+  APPEND = 1;
+  LIKE = 2;
+  UNLIKE = 3;
+}
+
