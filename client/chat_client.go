@@ -179,6 +179,7 @@ func appendChat(userName, groupName, message string, client gen.GroupChatClient)
 		UserName:  userName,
 		GroupName: groupName,
 		Message:   message,
+		ClientId:  clientID,
 	}
 
 	_, err := client.AppendChat(context.Background(), &appendChatRequest)

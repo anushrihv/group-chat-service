@@ -48,7 +48,10 @@ func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.
 		}
 	}
 
-	go g.updateLoginOnOtherServers(req)
+	if req.ClientId != "" {
+		req.ClientId = ""
+		go g.updateLoginOnOtherServers(req)
+	}
 
 	fmt.Println("User " + req.NewUserName + " logged in successfully")
 	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
@@ -112,7 +115,10 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		return &gen.JoinChatResponse{}, errors.New("Failed to persist user information for group " + req.NewGroupName)
 	}
 
-	go g.updateJoinChatOnOtherServers(req)
+	if req.ClientId != "" {
+		req.ClientId = ""
+		go g.updateJoinChatOnOtherServers(req)
+	}
 
 	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	return &gen.JoinChatResponse{}, nil
@@ -261,8 +267,11 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 				req.GroupName)
 		}
 
-		req.MessageId = messageID
-		g.updateAppendChatOnOtherServers(req)
+		if req.ClientId != "" {
+			req.ClientId = ""
+			req.MessageId = messageID
+			go g.updateAppendChatOnOtherServers(req)
+		}
 
 		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 		return &gen.AppendChatResponse{}, nil
@@ -417,7 +426,15 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 		return nil, errors.New("cannot like a message again")
 	}
 
+	if req.ClientId != "" {
+		req.Timestamp = timestamppb.New(time.Now())
+	}
 	g.updateMessageReaction(messageId, req.UserName, req.GroupName, "LIKE", req.Timestamp)
+
+	if req.ClientId != "" {
+		req.ClientId = ""
+		go g.updateLikeChatOnOtherServers(req)
+	}
 
 	if int(req.MessagePos) <= len(groupChat.Messages) && int(req.MessagePos) >= len(groupChat.Messages)-10 {
 		// If the user likes any of the last 10 messages then the client screen should be refreshed
@@ -428,12 +445,20 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 	return &gen.LikeChatResponse{}, nil
 }
 
-func (g *groupChatServer) updateMessageReaction(messageID, userName, groupName, newReactionType string, newReactionTimestamp *timestamppb.Timestamp) {
-	if newReactionTimestamp == nil {
-		// when the update is coming from the client
-		newReactionTimestamp = timestamppb.New(time.Now())
+func (g *groupChatServer) updateLikeChatOnOtherServers(req *gen.LikeChatRequest) {
+	for serverId, groupChatClient := range g.connectedServers {
+		_, err := groupChatClient.LikeChat(context.Background(), req)
+		if err != nil {
+			fmt.Println("Error updating LikeChat on server "+strconv.Itoa(int(serverId)), err)
+			// TODO append this update at the end of file {serverID}
+		} else {
+			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverId)) +
+				" with LikeChat for message " + g.groupState[req.GroupName].MessageOrder[req.MessagePos])
+		}
 	}
+}
 
+func (g *groupChatServer) updateMessageReaction(messageID, userName, groupName, newReactionType string, newReactionTimestamp *timestamppb.Timestamp) {
 	currReactionTimestamp, ok := g.groupState[groupName].Messages[messageID].Likes[userName]
 	if !ok {
 		currReactionTimestamp, _ = g.groupState[groupName].Messages[messageID].Unlikes[userName]
@@ -490,13 +515,34 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 		return nil, errors.New("cannot remove like from message not liked before")
 	}
 
+	if req.ClientId != "" {
+		req.Timestamp = timestamppb.New(time.Now())
+	}
 	g.updateMessageReaction(messageId, req.UserName, req.GroupName, "UNLIKE", req.Timestamp)
+
+	if req.ClientId != "" {
+		req.ClientId = ""
+		go g.updateRemoveLikeOnOtherServers(req)
+	}
 
 	if int(req.MessagePos) <= len(groupChat.Messages) && int(req.MessagePos) > len(groupChat.Messages)-10 {
 		g.groupUpdatesChan <- req.GroupName
 	}
 	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	return &gen.RemoveLikeResponse{}, nil
+}
+
+func (g *groupChatServer) updateRemoveLikeOnOtherServers(req *gen.RemoveLikeRequest) {
+	for serverId, groupChatClient := range g.connectedServers {
+		_, err := groupChatClient.RemoveLike(context.Background(), req)
+		if err != nil {
+			fmt.Println("Error updating RemoveLike on server "+strconv.Itoa(int(serverId)), err)
+			// TODO append this update at the end of file {serverID}
+		} else {
+			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverId)) +
+				" with RemoveLike for message " + g.groupState[req.GroupName].MessageOrder[req.MessagePos])
+		}
+	}
 }
 
 func (g *groupChatServer) PrintHistory(_ context.Context, req *gen.PrintHistoryRequest) (*gen.PrintHistoryResponse, error) {
