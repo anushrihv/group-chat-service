@@ -41,7 +41,7 @@ func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.
 		// Remove the user from the old group chat
 		_, ok := g.groupState[req.OldGroupName]
 		if ok {
-			g.removeUserFromGroup(req.OldUserName, req.OldGroupName)
+			_ = g.removeUserFromGroup(req.OldUserName, req.OldGroupName, req.ClientId)
 		} else {
 			// group not found. ideally should not happen. log and error and ignore
 			fmt.Println("User " + req.OldUserName + "'s old group " + req.OldGroupName + " not found!")
@@ -60,12 +60,16 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		return nil, errors.New("new group name cannot be empty")
 	}
 
+	if clientExists := g.validateGroupMembership(req.NewGroupName, req.UserName, req.ClientId); clientExists {
+		return nil, nil
+	}
+
 	if req.OldGroupName != "" {
 		// remove the user from the old group chat
 		_, ok := g.groupState[req.OldGroupName]
 		if ok {
 			fmt.Println("Client logged out from the old group chat " + req.OldGroupName)
-			err := g.removeUserFromGroup(req.GetUserName(), req.GetOldGroupName())
+			err := g.removeUserFromGroup(req.GetUserName(), req.GetOldGroupName(), req.ClientId)
 			if err != nil {
 				return &gen.JoinChatResponse{}, err
 			}
@@ -76,11 +80,11 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 	_, ok := g.groupState[req.NewGroupName]
 	if ok {
 		// add the user to the existing group
-		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
+		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), req.ClientId)
 	} else {
 		// create the group since it does not exist
 		g.createGroup(req.GetNewGroupName(), g.groupState)
-		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), g.groupState[req.NewGroupName].Users)
+		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), req.ClientId)
 	}
 	g.mu.Unlock()
 
@@ -95,6 +99,25 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 
 	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	return &gen.JoinChatResponse{}, nil
+}
+
+/*
+* check if this client ID has already been added for this user. This can happen when the same JoinChat request
+comes from multiple servers after the network partition has been resolved
+*/
+func (g *groupChatServer) validateGroupMembership(groupName, userName, clientID string) bool {
+	groupData, ok := g.groupState[groupName]
+	if ok {
+		client, ok := groupData.Users[userName]
+		if ok {
+			_, ok := client.Clients[clientID]
+			if ok {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (g *groupChatServer) persistGroupUser(users map[string]int32, groupName string) error {
@@ -132,30 +155,33 @@ func (g *groupChatServer) updateJoinChatOnOtherServers(joinChatRequest *gen.Join
 
 /*
 *
-If the user has already joined the chat from other clients, increase the client count
-Else set the clientCount to 1
+Add the clientID to the set of clients for this user
 */
-func (g *groupChatServer) addUserToGroup(userName, groupName string, users map[string]int32) {
-	clientCount, ok := users[userName]
+func (g *groupChatServer) addUserToGroup(userName, groupName, clientID string) {
+	users := g.groupState[groupName].Users
+	client, ok := users[userName]
 	if ok {
-		clientCount++
-		users[userName] = clientCount
+		clients := client.Clients
+		clients[clientID] = true
+		users[userName] = client
 	} else {
-		clientCount = 1
-		users[userName] = clientCount
+		clients := make(map[string]bool)
+		clients[clientID] = true
+		client := gen.Client{Clients: clients}
+		users[userName] = &client
 		g.groupUpdatesChan <- groupName
 	}
 
-	fmt.Printf("User %s added to the group %s with %d clients", userName, groupName, clientCount)
+	fmt.Printf("User %s added to the group %s with %s client ID", userName, groupName, clientID)
 	fmt.Println()
 }
 
 /*
 *
-If the user has joined the chat via multiple clients, just reduce the clientCount by 1.
-Else, remove the user from the group
+If the user has joined the chat via multiple clients, just remove that client. If a user is logged in through
+0 clients after this, then remove the user from the group
 */
-func (g *groupChatServer) removeUserFromGroup(userName, groupName string) error {
+func (g *groupChatServer) removeUserFromGroup(userName, groupName, clientID string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	groupData, ok := g.groupState[groupName]
@@ -165,14 +191,12 @@ func (g *groupChatServer) removeUserFromGroup(userName, groupName string) error 
 	}
 	users := groupData.Users
 
-	clientCount := users[userName]
-	if clientCount == 1 {
+	clients := users[userName].Clients
+	delete(clients, clientID)
+	if len(clients) == 0 {
 		delete(users, userName)
-		fmt.Println("removed user " + userName + " from group " + groupName)
 		g.groupUpdatesChan <- groupName
-	} else {
-		users[userName] = clientCount - 1
-		fmt.Println("reduced user client count for user " + userName + " from group " + groupName)
+		fmt.Println("removed user " + userName + " from group " + groupName)
 	}
 
 	// persist user information on file
@@ -188,7 +212,7 @@ func (g *groupChatServer) removeUserFromGroup(userName, groupName string) error 
 
 func (g *groupChatServer) createGroup(groupName string, groupState map[string]*gen.GroupData) {
 	groupData := &gen.GroupData{
-		Users:    make(map[string]int32),
+		Users:    make(map[string]*gen.Client),
 		Messages: make(map[string]*gen.Message),
 	}
 
@@ -464,7 +488,7 @@ func (g *groupChatServer) SubscribeToGroupUpdates(stream gen.GroupChat_Subscribe
 			clientInfo := g.clients[stream]
 			fmt.Println("stream to be removed : ", stream)
 			if clientInfo != nil {
-				g.removeUserFromGroup(clientInfo.UserName, clientInfo.GroupName)
+				_ = g.removeUserFromGroup(clientInfo.UserName, clientInfo.GroupName, clientInfo.ClientId)
 			}
 			g.RemoveClient(stream)
 			return nil
