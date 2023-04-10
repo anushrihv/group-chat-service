@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"group-chat-service/gen"
@@ -17,12 +18,16 @@ import (
 var client gen.GroupChatClient
 var conn *grpc.ClientConn
 var groupName, userName string
+var clientID string
 
 func main() {
 
 	fmt.Println("Welcome to the GroupChat service!")
 	var stream gen.GroupChat_SubscribeToGroupUpdatesClient
 	var err error
+
+	// assign unique client ID
+	clientID = uuid.New().String()
 
 outer:
 	for {
@@ -155,6 +160,7 @@ func joinGroupChat(userName, oldGroupName, newGroupName string, client gen.Group
 		NewGroupName: newGroupName,
 		OldGroupName: oldGroupName,
 		UserName:     userName,
+		ClientId:     clientID,
 	}
 
 	_, err := client.JoinChat(context.Background(), &joinChatRequest)
@@ -293,6 +299,7 @@ func updateClientInformationOnServer(userName string, groupName string,
 	err := stream.Send(&gen.ClientInformation{
 		UserName:  userName,
 		GroupName: groupName,
+		ClientId:  clientID,
 	})
 	if err != nil {
 		fmt.Println("failed to update the server with the client information for user name " + userName +
