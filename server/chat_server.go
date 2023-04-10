@@ -48,9 +48,25 @@ func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.
 		}
 	}
 
+	go g.updateLoginOnOtherServers(req)
+
 	fmt.Println("User " + req.NewUserName + " logged in successfully")
 	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	return &gen.LoginResponse{}, nil
+}
+
+func (g *groupChatServer) updateLoginOnOtherServers(req *gen.LoginRequest) {
+	for serverID, client := range g.connectedServers {
+		_, err := client.Login(context.Background(), req)
+		if err != nil {
+			// TODO append this update at the end of file {serverID}
+			fmt.Println("failed to update login information for user " + req.NewUserName + " on server " +
+				strconv.Itoa(int(serverID)))
+		} else {
+			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverID)) + " about user login for user " +
+				req.NewUserName)
+		}
+	}
 }
 
 func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) (*gen.JoinChatResponse, error) {
@@ -95,7 +111,8 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		fmt.Println("Failed to persist group user information for group "+req.NewGroupName, err)
 		return &gen.JoinChatResponse{}, errors.New("Failed to persist user information for group " + req.NewGroupName)
 	}
-	//go g.updateJoinChatOnOtherServers(req)
+
+	go g.updateJoinChatOnOtherServers(req)
 
 	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	return &gen.JoinChatResponse{}, nil
@@ -145,7 +162,7 @@ func (g *groupChatServer) updateJoinChatOnOtherServers(joinChatRequest *gen.Join
 		_, err := groupChatClient.JoinChat(context.Background(), joinChatRequest)
 		if err != nil {
 			fmt.Println("Error updating group user information on serverId "+strconv.Itoa(int(serverId)), err)
-			// TODO save the update in the corresponding server’s file
+			// TODO append this update at the end of file {serverID}
 		} else {
 			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverId)) + " about user " +
 				joinChatRequest.UserName + " joining group " + joinChatRequest.NewGroupName)
@@ -238,8 +255,15 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 	}
 
 	if ok {
-		createMessage(req.UserName, req.GroupName, req.Message, g)
-		fmt.Println("Created message " + req.Message + " by user " + req.UserName + " in group " + req.GroupName)
+		messageID, err := g.createMessage(req.UserName, req.GroupName, req.Message)
+		if err != nil {
+			return nil, errors.New("failed to append message from user " + req.UserName + " in group " +
+				req.GroupName)
+		}
+
+		req.MessageId = messageID
+		g.updateAppendChatOnOtherServers(req)
+
 		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 		return &gen.AppendChatResponse{}, nil
 	} else {
@@ -247,14 +271,28 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 	}
 }
 
-func createMessage(userName, groupName, message string, g *groupChatServer) {
+func (g *groupChatServer) updateAppendChatOnOtherServers(req *gen.AppendChatRequest) {
+	for serverId, groupChatClient := range g.connectedServers {
+		_, err := groupChatClient.AppendChat(context.Background(), req)
+		if err != nil {
+			fmt.Println("Error updating AppendChat on server "+strconv.Itoa(int(serverId)), err)
+			// TODO append this update at the end of file {serverID}
+		} else {
+			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverId)) +
+				" with message ID " + req.MessageId)
+		}
+	}
+}
+
+func (g *groupChatServer) createMessage(userName, groupName, message string) (string, error) {
 	// update messages in memory
 	messageId := uuid.New().String()
 	messageObject := &gen.Message{
 		MessageId: messageId,
 		Message:   message,
 		Owner:     userName,
-		Likes:     make(map[string]bool),
+		Likes:     make(map[string]*timestamppb.Timestamp),
+		Unlikes:   make(map[string]*timestamppb.Timestamp),
 		Timestamp: timestamppb.New(time.Now()),
 	}
 	g.mu.Lock()
@@ -267,12 +305,13 @@ func createMessage(userName, groupName, message string, g *groupChatServer) {
 	err := g.persistDataOnFile(fileName, messageObject)
 	if err != nil {
 		fmt.Println("Failed to persist message "+messageId, err)
-		return
+		return "", err
 	}
 
 	// update clients
 	g.groupUpdatesChan <- groupName
-	fmt.Println("Updated messages: ", g.groupState[groupName].Messages)
+	fmt.Println("Created message " + message + " by user " + userName + " in group " + groupName)
+	return messageId, nil
 }
 
 func (g *groupChatServer) persistDataOnFile(fileName string, obj interface{}) error {
@@ -372,11 +411,13 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 		return nil, errors.New("message index out of bounds")
 	} else if req.UserName == groupChat.Messages[messageId].Owner {
 		return nil, errors.New("cannot like your own message")
-	} else if _, ok := groupChat.Messages[messageId].Likes[req.UserName]; ok {
+	} else if _, ok := groupChat.Messages[messageId].Likes[req.UserName]; ok && req.ClientId != "" {
+		// user is not allowed to like a message again.
+		// But if the update is coming from another server, we do not throw an error since we may have to update the timestamp
 		return nil, errors.New("cannot like a message again")
 	}
 
-	groupChat.Messages[messageId].Likes[req.UserName] = true
+	g.updateMessageReaction(messageId, req.UserName, req.GroupName, "LIKE", req.Timestamp)
 
 	if int(req.MessagePos) <= len(groupChat.Messages) && int(req.MessagePos) >= len(groupChat.Messages)-10 {
 		// If the user likes any of the last 10 messages then the client screen should be refreshed
@@ -385,6 +426,43 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 
 	return &gen.LikeChatResponse{}, nil
+}
+
+func (g *groupChatServer) updateMessageReaction(messageID, userName, groupName, newReactionType string, newReactionTimestamp *timestamppb.Timestamp) {
+	if newReactionTimestamp == nil {
+		// when the update is coming from the client
+		newReactionTimestamp = timestamppb.New(time.Now())
+	}
+
+	currReactionTimestamp, ok := g.groupState[groupName].Messages[messageID].Likes[userName]
+	if !ok {
+		currReactionTimestamp, _ = g.groupState[groupName].Messages[messageID].Unlikes[userName]
+	}
+
+	if currReactionTimestamp == nil {
+		g.groupState[groupName].Messages[messageID].Likes[userName] = newReactionTimestamp
+	} else if g.compare(currReactionTimestamp, newReactionTimestamp) >= 0 {
+		// ignore the update since the reaction in the memory is the latest reaction
+		// only applicable for server updates
+		return
+	} else {
+		// accept the new update
+		if newReactionType == "LIKE" {
+			delete(g.groupState[groupName].Messages[messageID].Unlikes, userName)
+			g.groupState[groupName].Messages[messageID].Likes[userName] = newReactionTimestamp
+		} else {
+			delete(g.groupState[groupName].Messages[messageID].Likes, userName)
+			g.groupState[groupName].Messages[messageID].Unlikes[userName] = newReactionTimestamp
+		}
+	}
+
+	// persist the message
+	fileName := "../data/" + groupName + "/messages/" + messageID + ".json"
+	err := g.persistDataOnFile(fileName, g.groupState[groupName].Messages[messageID])
+	if err != nil {
+		fmt.Println("Failed to persist message "+messageID, err)
+		return
+	}
 }
 
 func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeRequest) (*gen.RemoveLikeResponse, error) {
@@ -406,20 +484,18 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 
 	if _, ok = groupChat.Users[req.UserName]; !ok {
 		return nil, errors.New("user does not belong to group")
-	}
-	if int(req.MessagePos) > len(groupChat.Messages) || int(req.MessagePos) < 0 {
+	} else if int(req.MessagePos) > len(groupChat.Messages) || int(req.MessagePos) < 0 {
 		return nil, errors.New("message index out of bounds")
-	}
-
-	if _, ok := groupChat.Messages[messageId].Likes[req.UserName]; ok {
-		delete(groupChat.Messages[messageId].Likes, req.UserName)
-		if int(req.MessagePos) <= len(groupChat.Messages) && int(req.MessagePos) > len(groupChat.Messages)-10 {
-			g.groupUpdatesChan <- req.GroupName
-		}
-		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
-	} else {
+	} else if _, ok := groupChat.Messages[messageId].Likes[req.UserName]; !ok && req.ClientId != "" {
 		return nil, errors.New("cannot remove like from message not liked before")
 	}
+
+	g.updateMessageReaction(messageId, req.UserName, req.GroupName, "UNLIKE", req.Timestamp)
+
+	if int(req.MessagePos) <= len(groupChat.Messages) && int(req.MessagePos) > len(groupChat.Messages)-10 {
+		g.groupUpdatesChan <- req.GroupName
+	}
+	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	return &gen.RemoveLikeResponse{}, nil
 }
 
@@ -559,19 +635,20 @@ func (g *groupChatServer) healthcheckCall() {
 					conn, _ = grpc.Dial(g.allServers[i], grpc.WithTransportCredentials(insecure.NewCredentials()))
 					client = gen.NewGroupChatClient(conn)
 				}
-				_, err = client.HealthCheck(context.Background(), &gen.HealthCheckRequest{})
+				//_, err = client.HealthCheck(context.Background(), &gen.HealthCheckRequest{})
 				if err != nil {
-					fmt.Printf("Server not able to connect to Server %d\n", i+1)
+					//fmt.Printf("Server not able to connect to Server %d\n", i+1)
 					if _, ok := g.connectedServers[int32(i+1)]; ok {
 						delete(g.connectedServers, int32(i+1))
 					}
-					fmt.Println("map:", g.connectedServers)
 				} else {
-					fmt.Printf("Server connected to Server %d\n", i+1)
+					//fmt.Printf("Server connected to Server %d\n", i+1)
 					g.connectedServers[int32(i+1)] = client
-					fmt.Printf("Added server %d to connectedServers map\n", i+1)
-					fmt.Println("map:", g.connectedServers)
+					//fmt.Printf("Added server %d to connectedServers map\n", i+1)
 				}
+
+				//fmt.Print("Connected servers: ")
+				//fmt.Println(g.connectedServers)
 			}
 		}
 		time.Sleep(1 * time.Second)
@@ -607,7 +684,7 @@ func createUpdateFiles() {
 
 func main() {
 	// Create a TCP listener
-	lis, err := net.Listen("tcp", "localhost:50052")
+	lis, err := net.Listen("tcp", "localhost:50051")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -616,7 +693,7 @@ func main() {
 	s := grpc.NewServer()
 	groupUpdatesChan := make(chan string)
 	args := os.Args
-	serverId, _ := strconv.ParseInt(args[1], 10, 32)
+	serverId, _ := strconv.ParseInt(args[2], 10, 32)
 	// Register your server implementation with the gRPC server
 	srv := &groupChatServer{
 		groupState:       make(map[string]*gen.GroupData),

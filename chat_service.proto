@@ -56,6 +56,8 @@ message LikeChatRequest {
   string group_name = 2;
   int32 message_pos = 3;
   REQUEST_TYPE request_type = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  string client_id = 6;
 }
 
 
@@ -67,6 +69,8 @@ message RemoveLikeRequest {
   string group_name = 2;
   int32 message_pos = 3;
   REQUEST_TYPE request_type = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  string client_id = 6;
 }
 
 message RemoveLikeResponse {
@@ -126,8 +130,9 @@ message Message {
   string message_id = 1;
   string message = 2;
   string owner = 3;
-  map<string, bool> likes = 4;
+  map<string, google.protobuf.Timestamp> likes = 4;
   google.protobuf.Timestamp timestamp = 5;
+  map<string, google.protobuf.Timestamp> unlikes = 6;
 }
 
 enum REQUEST_TYPE{

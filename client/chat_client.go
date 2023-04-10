@@ -194,6 +194,7 @@ func likeChat(userName, groupName string, messagePos int32, client gen.GroupChat
 		UserName:   userName,
 		GroupName:  groupName,
 		MessagePos: messagePos,
+		ClientId:   clientID,
 	}
 
 	_, err := client.LikeChat(context.Background(), &likeChatRequest)
@@ -209,6 +210,7 @@ func removeLikeChat(userName, groupName string, messagePos int32, client gen.Gro
 		UserName:   userName,
 		GroupName:  groupName,
 		MessagePos: messagePos,
+		ClientId:   clientID,
 	}
 
 	_, err := client.RemoveLike(context.Background(), &removeLikeRequest)
