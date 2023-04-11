@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"group-chat-service/gen"
 	"log"
@@ -168,10 +169,39 @@ func (g *groupChatServer) updateJoinChatOnOtherServers(joinChatRequest *gen.Join
 		_, err := groupChatClient.JoinChat(context.Background(), joinChatRequest)
 		if err != nil {
 			fmt.Println("Error updating group user information on serverId "+strconv.Itoa(int(serverId)), err)
-			// TODO append this update at the end of file {serverID}
+			// TODO save the update in the corresponding server’s file
+			fileName := "UpdateServer" + strconv.Itoa(int(serverId))
+			_, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+			// convert user map to json
+			joinJson, err := json.Marshal(joinChatRequest)
+			if err != nil {
+				fmt.Println("Error while marshaling group user information", err)
+
+			}
+			// write the user JSON to the file
+			err = os.WriteFile(fileName, joinJson, 0644)
+			if err != nil {
+				fmt.Println("Error while writing to file ", err)
+			}
 		} else {
 			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverId)) + " about user " +
 				joinChatRequest.UserName + " joining group " + joinChatRequest.NewGroupName)
+		}
+	}
+	for i := 0; i < 5; i++ {
+		if _, ok := g.connectedServers[int32(i+1)]; !ok {
+			// TODO save the update in the corresponding server’s file
+			filename := "UpdateServer" + strconv.Itoa(i+1)
+			f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+			if _, err := f.Write([]byte(protojson.Format(joinChatRequest))); err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 }
@@ -724,8 +754,23 @@ func (g *groupChatServer) initializeAllServers() {
 	g.updateServers = make([]string, 0)
 }
 
-func createUpdateFiles() {
+func (g *groupChatServer) createUpdateFiles() {
+	for i := 0; i < 5; i++ {
+		if int32(i+1) != g.serverID {
+			fileName := "../data/Updates/Server" + strconv.Itoa(int(g.serverID)) + "UpdateServer" + strconv.Itoa(i+1)
 
+			// Create directories if they don't exist
+			err := os.MkdirAll(filepath.Dir(fileName), os.ModePerm)
+			if err != nil {
+				fmt.Println("Failed to create directory "+filepath.Dir(fileName), err)
+			}
+			_, err = os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+	// TODO: Need to close the files at some point
 }
 
 func main() {
@@ -751,6 +796,7 @@ func main() {
 	go srv.sendGroupUpdatesToClients()
 	srv.initializeAllServers()
 	go srv.healthcheckCall()
+	srv.createUpdateFiles()
 
 	// Start the gRPC server
 	fmt.Println("Starting gRPC server on port 50051...")

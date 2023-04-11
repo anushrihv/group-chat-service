@@ -160,6 +160,7 @@ func joinGroupChat(userName, oldGroupName, newGroupName string, client gen.Group
 		NewGroupName: newGroupName,
 		OldGroupName: oldGroupName,
 		UserName:     userName,
+		RequestType:  0,
 		ClientId:     clientID,
 	}
 
@@ -176,9 +177,10 @@ func joinGroupChat(userName, oldGroupName, newGroupName string, client gen.Group
 func appendChat(userName, groupName, message string, client gen.GroupChatClient) {
 
 	appendChatRequest := gen.AppendChatRequest{
-		UserName:  userName,
-		GroupName: groupName,
-		Message:   message,
+		UserName:    userName,
+		GroupName:   groupName,
+		Message:     message,
+		RequestType: 1,
 		ClientId:  clientID,
 	}
 
@@ -192,10 +194,11 @@ func appendChat(userName, groupName, message string, client gen.GroupChatClient)
 func likeChat(userName, groupName string, messagePos int32, client gen.GroupChatClient) {
 
 	likeChatRequest := gen.LikeChatRequest{
-		UserName:   userName,
-		GroupName:  groupName,
-		MessagePos: messagePos,
-		ClientId:   clientID,
+		UserName:    userName,
+		GroupName:   groupName,
+		MessagePos:  messagePos,
+		RequestType: 2,
+		ClientId:  clientID,
 	}
 
 	_, err := client.LikeChat(context.Background(), &likeChatRequest)
@@ -208,10 +211,11 @@ func likeChat(userName, groupName string, messagePos int32, client gen.GroupChat
 func removeLikeChat(userName, groupName string, messagePos int32, client gen.GroupChatClient) {
 
 	removeLikeRequest := gen.RemoveLikeRequest{
-		UserName:   userName,
-		GroupName:  groupName,
-		MessagePos: messagePos,
-		ClientId:   clientID,
+		UserName:    userName,
+		GroupName:   groupName,
+		MessagePos:  messagePos,
+		RequestType: 3,
+		ClientId:  clientID,
 	}
 
 	_, err := client.RemoveLike(context.Background(), &removeLikeRequest)
