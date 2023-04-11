@@ -711,7 +711,7 @@ func (g *groupChatServer) healthcheckCall() {
 					conn, _ = grpc.Dial(g.allServers[i], grpc.WithTransportCredentials(insecure.NewCredentials()))
 					client = gen.NewGroupChatClient(conn)
 				}
-				//_, err = client.HealthCheck(context.Background(), &gen.HealthCheckRequest{})
+				_, err = client.HealthCheck(context.Background(), &gen.HealthCheckRequest{})
 				if err != nil {
 					//fmt.Printf("Server not able to connect to Server %d\n", i+1)
 					if _, ok := g.connectedServers[int32(i+1)]; ok {
@@ -727,6 +727,8 @@ func (g *groupChatServer) healthcheckCall() {
 				//fmt.Println(g.connectedServers)
 			}
 		}
+		fmt.Print("Connected servers: ")
+		fmt.Println(g.connectedServers)
 		time.Sleep(1 * time.Second)
 	}
 }
