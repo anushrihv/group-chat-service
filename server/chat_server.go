@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"group-chat-service/gen"
 	"log"
@@ -164,46 +163,69 @@ func (g *groupChatServer) persistGroupUser(users map[string]int32, groupName str
 	return nil
 }
 
-func (g *groupChatServer) updateJoinChatOnOtherServers(joinChatRequest *gen.JoinChatRequest) {
-	for serverId, groupChatClient := range g.connectedServers {
-		_, err := groupChatClient.JoinChat(context.Background(), joinChatRequest)
-		if err != nil {
-			fmt.Println("Error updating group user information on serverId "+strconv.Itoa(int(serverId)), err)
-			// TODO save the update in the corresponding server’s file
-			fileName := "UpdateServer" + strconv.Itoa(int(serverId))
-			_, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				panic(err)
-			}
-			// convert user map to json
-			joinJson, err := json.Marshal(joinChatRequest)
-			if err != nil {
-				fmt.Println("Error while marshaling group user information", err)
-
-			}
-			// write the user JSON to the file
-			err = os.WriteFile(fileName, joinJson, 0644)
-			if err != nil {
-				fmt.Println("Error while writing to file ", err)
-			}
-		} else {
-			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverId)) + " about user " +
-				joinChatRequest.UserName + " joining group " + joinChatRequest.NewGroupName)
-		}
-	}
+func (g *groupChatServer) updateJoinChatOnOtherServers(joinChatRequest *gen.JoinChatRequest) error {
 	for i := 0; i < 5; i++ {
-		if _, ok := g.connectedServers[int32(i+1)]; !ok {
-			// TODO save the update in the corresponding server’s file
-			filename := "UpdateServer" + strconv.Itoa(i+1)
-			f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				panic(err)
+		_, ok := g.connectedServers[int32(i+1)]
+		// for server ids not in connectedServers
+		if !ok && int32(i+1) != g.serverID {
+
+			// change join Request object to struct
+			appendObject := map[string]interface{}{
+				"NewGroupName": joinChatRequest.NewGroupName,
+				"OldGroupName": joinChatRequest.OldGroupName,
+				"UserName":     joinChatRequest.UserName,
+				"RequestType":  joinChatRequest.RequestType,
+				"ClientId":     joinChatRequest.ClientId,
 			}
-			if _, err := f.Write([]byte(protojson.Format(joinChatRequest))); err != nil {
-				log.Fatal(err)
+
+			// open file for reading all json updates
+			fileName := "../data/Updates/" + strconv.Itoa(int(g.serverID)) + "/updateServer" + strconv.Itoa(i+1) + ".json"
+
+			var result []byte
+
+			// unmarshal all json updates
+			var updates []map[string]interface{}
+			byteValue, _ := os.ReadFile(fileName)
+			if byteValue[0] == uint8(0) {
+				result, _ = json.Marshal(appendObject)
+			} else {
+				err := json.Unmarshal(byteValue, &updates)
+				if err != nil {
+					log.Fatalf("Error during Unmarshalling updates for server update %d", i+1, err)
+				}
+				// append new update
+				updates = append(updates, appendObject)
+
+				//marshall all json
+				result, err = json.Marshal(updates)
+				if err != nil {
+					fmt.Println("Error during marshalling all json updates", err)
+				}
+			}
+
+			// over-write the user JSON to the file
+			err := os.WriteFile(fileName, result, 0644)
+			if err != nil {
+				fmt.Println("Error while persisting user information for group "+joinChatRequest.NewGroupName, err)
+				return err
+			}
+		} else if ok {
+			// update for server in connectedServers
+			groupChatClient, ok := g.connectedServers[int32(i+1)]
+			if !ok {
+				log.Fatalf("Server not in connectedServers")
+			}
+			_, err := groupChatClient.JoinChat(context.Background(), joinChatRequest)
+			if err != nil {
+				fmt.Println("Error updating group user information on serverId "+strconv.Itoa(i+1), err)
+				// TODO: add same code from above
+			} else {
+				fmt.Println("Successfully updated server " + strconv.Itoa(i+1) + " about user " +
+					joinChatRequest.UserName + " joining group " + joinChatRequest.NewGroupName)
 			}
 		}
 	}
+	return nil
 }
 
 /*
@@ -759,7 +781,7 @@ func (g *groupChatServer) initializeAllServers() {
 func (g *groupChatServer) createUpdateFiles() {
 	for i := 0; i < 5; i++ {
 		if int32(i+1) != g.serverID {
-			fileName := "../data/Updates/Server" + strconv.Itoa(int(g.serverID)) + "UpdateServer" + strconv.Itoa(i+1)
+			fileName := "../data/Updates/" + strconv.Itoa(int(g.serverID)) + "/updateServer" + strconv.Itoa(i+1) + ".json"
 
 			// Create directories if they don't exist
 			err := os.MkdirAll(filepath.Dir(fileName), os.ModePerm)
