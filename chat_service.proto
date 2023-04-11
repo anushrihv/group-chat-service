@@ -20,6 +20,7 @@ message LoginRequest {
   string old_user_name = 1;
   string old_group_name = 2;
   string new_user_name = 3;
+  string client_id = 4;
 }
 
 message LoginResponse {
@@ -31,6 +32,7 @@ message JoinChatRequest {
   string old_group_name = 2;
   string user_name = 3;
   REQUEST_TYPE request_type = 4;
+  string client_id = 5;
 }
 
 message JoinChatResponse {
@@ -103,6 +105,7 @@ message HealthCheckResponse {
 message ClientInformation {
   string user_name = 1;
   string group_name = 2;
+  string client_id = 3;
 }
 
 message GroupUpdates {
@@ -110,11 +113,14 @@ message GroupUpdates {
 }
 
 message GroupData {
-  map<string, int32> users = 1;
+  map<string, Client> users = 1;
   map<string, Message> messages = 2;
   repeated string messageOrder = 3;
 }
 
+message Client {
+  map<string, bool> clients = 1;
+}
 
 message Message {
   string message_id = 1;
