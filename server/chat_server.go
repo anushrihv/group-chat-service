@@ -747,6 +747,57 @@ func (g *groupChatServer) healthcheckCall() {
 	}
 }
 
+func (g *groupChatServer) updateNewlyConnectedServers() {
+	for {
+		if len(g.updateServers) > 0 {
+			for _, serverID := range g.updateServers {
+				fileName := "../data/updates/" + strconv.Itoa(int(g.serverID)) + "/updateServer" + serverID + ".json"
+
+				// Read the JSON data from file
+				updateArr, err := os.ReadFile(fileName)
+				if err != nil {
+					panic(err)
+				}
+
+				// Unmarshal the JSON data into an array of generic maps
+				var updateObjects []map[string]interface{}
+				if err := json.Unmarshal(updateArr, &updateObjects); err != nil {
+					panic(err)
+				}
+
+				// Iterate through the updateObjects and cast them to the correct type
+				for _, obj := range updateObjects {
+					// Extract the type field
+					typeStr := obj["requestType"].(string)
+
+					// Get the request object and update the newly connected server
+					switch typeStr {
+					case "1":
+						joinChatRequest := &gen.JoinChatRequest{
+							NewGroupName: obj["newGroupName"].(string),
+							OldGroupName: obj["oldGroupName"].(string),
+							UserName:     obj["userName"].(string),
+						}
+						fmt.Println("Updating newly connected server "+serverID+" with JoinChatRequest : ",
+							joinChatRequest)
+						g.updateJoinChatOnOtherServers(joinChatRequest)
+					default:
+						fmt.Printf("Unknown type: %s\n", typeStr)
+					}
+
+					// TODO remove this update from the array
+
+				}
+
+				// TODO once all updates are sent, remove this server ID from updateServers
+				// write the contents back to the file
+			}
+		}
+
+		time.Sleep(2 * time.Minute)
+	}
+}
+
 func (g *groupChatServer) HealthCheck(_ context.Context, request *gen.HealthCheckRequest) (*gen.HealthCheckResponse, error) {
 	fmt.Printf("\n***Entered HealthCheck function***\n\n")
 	return &gen.HealthCheckResponse{}, nil
@@ -813,6 +864,7 @@ func main() {
 	srv.initializeAllServers()
 	go srv.healthcheckCall()
 	srv.createUpdateFiles()
+	go srv.updateNewlyConnectedServers()
 
 	// Start the gRPC server
 	fmt.Println("Starting gRPC server on port 50051...")
