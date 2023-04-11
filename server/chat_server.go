@@ -63,9 +63,25 @@ func (g *groupChatServer) updateLoginOnOtherServers(req *gen.LoginRequest) {
 	for serverID, client := range g.connectedServers {
 		_, err := client.Login(context.Background(), req)
 		if err != nil {
-			// TODO append this update at the end of file {serverID}
-			fmt.Println("failed to update login information for user " + req.NewUserName + " on server " +
-				strconv.Itoa(int(serverID)))
+			fmt.Println("Error updating group user information on serverId "+strconv.Itoa(int(serverID)), err)
+
+			// save the update in the corresponding server’s file
+			fileName := "../data/updates/" + strconv.Itoa(int(g.serverID)) + "/updateServer" + strconv.Itoa(int(serverID)) + ".json"
+			_, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				panic(err)
+			}
+			// convert user map to json
+			joinJson, err := json.Marshal(req)
+			if err != nil {
+				fmt.Println("Error while marshaling group user information", err)
+
+			}
+			// write the user JSON to the file
+			err = os.WriteFile(fileName, joinJson, 0644)
+			if err != nil {
+				fmt.Println("Error while writing to file ", err)
+			}
 		} else {
 			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverID)) + " about user login for user " +
 				req.NewUserName)
@@ -757,7 +773,7 @@ func (g *groupChatServer) initializeAllServers() {
 func (g *groupChatServer) createUpdateFiles() {
 	for i := 0; i < 5; i++ {
 		if int32(i+1) != g.serverID {
-			fileName := "../data/Updates/Server" + strconv.Itoa(int(g.serverID)) + "UpdateServer" + strconv.Itoa(i+1)
+			fileName := "../data/updates/" + strconv.Itoa(int(g.serverID)) + "/updateServer" + strconv.Itoa(i+1) + ".json"
 
 			// Create directories if they don't exist
 			err := os.MkdirAll(filepath.Dir(fileName), os.ModePerm)
