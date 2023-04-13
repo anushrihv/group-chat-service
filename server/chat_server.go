@@ -797,6 +797,30 @@ func (g *groupChatServer) createUpdateFiles() {
 	// TODO: Need to close the files at some point
 }
 
+func (g *groupChatServer) createGroupChatState() {
+	// read all server files one by one
+	for i := 0; i < 5; i++ {
+		if int32(i+1) != g.serverID {
+			fileName := "../data/Updates/" + strconv.Itoa(int(g.serverID)) + "/updateServer" + strconv.Itoa(i+1) + ".json"
+			// unmarshal all json updates
+			var updates []map[string]interface{}
+			byteValue, _ := os.ReadFile(fileName)
+			if byteValue[0] != uint8(0) {
+				err := json.Unmarshal(byteValue, &updates)
+				if err != nil {
+					log.Fatalf("Error during Unmarshalling updates for server update %d", i+1, err)
+				}
+				// iterating it
+				for _, v := range updates {
+
+					fmt.Println(v)
+				}
+			}
+
+		}
+	}
+}
+
 func main() {
 	// Create a TCP listener
 	lis, err := net.Listen("tcp", "localhost:50051")
