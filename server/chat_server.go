@@ -32,6 +32,8 @@ type groupChatServer struct {
 	updateServers    []string
 }
 
+var filePrefix string
+
 func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.LoginResponse, error) {
 	if req.NewUserName == "" {
 		return nil, errors.New("UserName cannot be empty")
@@ -42,6 +44,8 @@ func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.
 		_, ok := g.groupState[req.OldGroupName]
 		if ok {
 			_ = g.removeUserFromGroup(req.OldUserName, req.OldGroupName, req.ClientId)
+			fmt.Println("Old group chat state : ")
+			g.printGroupChatState(req.OldGroupName)
 		} else {
 			// group not found. ideally should not happen. log and error and ignore
 			fmt.Println("User " + req.OldUserName + "'s old group " + req.OldGroupName + " not found!")
@@ -53,23 +57,77 @@ func (g *groupChatServer) Login(_ context.Context, req *gen.LoginRequest) (*gen.
 		go g.updateLoginOnOtherServers(req)
 	}
 
-	fmt.Println("User " + req.NewUserName + " logged in successfully")
-	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
 	return &gen.LoginResponse{}, nil
 }
 
 func (g *groupChatServer) updateLoginOnOtherServers(req *gen.LoginRequest) {
-	for serverID, client := range g.connectedServers {
-		_, err := client.Login(context.Background(), req)
-		if err != nil {
-			// TODO append this update at the end of file {serverID}
-			fmt.Println("failed to update login information for user " + req.NewUserName + " on server " +
-				strconv.Itoa(int(serverID)))
-		} else {
-			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverID)) + " about user login for user " +
-				req.NewUserName)
+	var i int32
+	for i = 1; i <= 5; i++ {
+		serverToUpdate := i
+		if client, ok := g.connectedServers[serverToUpdate]; ok {
+			_, err := client.Login(context.Background(), req)
+			if err != nil {
+				fmt.Println("Error updating group user information on serverId "+strconv.Itoa(int(serverToUpdate)), err)
+				// save the update in the corresponding server’s file
+				go g.saveUnsentUpdate(serverToUpdate, req)
+			}
+		} else if serverToUpdate != g.serverID {
+			go g.saveUnsentUpdate(serverToUpdate, req)
 		}
 	}
+}
+
+func (g *groupChatServer) saveUnsentUpdate(serverToUpdate int32, req interface{}) {
+	fileName := filePrefix + "updates/updateServer" + strconv.Itoa(int(serverToUpdate)) + ".json"
+
+	// read file
+	byteArr, err := os.ReadFile(fileName)
+	if err != nil {
+		fmt.Println("failed to read file "+fileName, err)
+	}
+
+	var updateObjects []map[string]interface{}
+	if len(byteArr) > 0 {
+		// Unmarshal the JSON data into an array of generic maps
+		if err := json.Unmarshal(byteArr, &updateObjects); err != nil {
+			return
+		}
+	}
+
+	// Marshal the req
+	requestMap, err := g.objectToMap(req)
+	if err != nil {
+		return
+	}
+
+	// append the new request object to the array of update objects
+	updateObjects = append(updateObjects, requestMap)
+
+	// Marshall it again
+	byteArr, err = json.Marshal(updateObjects)
+	if err != nil {
+		return
+	}
+
+	// Write it back to the file
+	err = os.WriteFile(fileName, byteArr, 0644)
+	if err != nil {
+		fmt.Println("Error while writing to file ", err)
+	}
+}
+
+func (g *groupChatServer) objectToMap(obj interface{}) (map[string]interface{}, error) {
+	var data map[string]interface{}
+
+	bytes, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(bytes, &data)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) (*gen.JoinChatResponse, error) {
@@ -87,11 +145,12 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		// remove the user from the old group chat
 		_, ok := g.groupState[req.OldGroupName]
 		if ok {
-			fmt.Println("Client logged out from the old group chat " + req.OldGroupName)
 			err := g.removeUserFromGroup(req.GetUserName(), req.GetOldGroupName(), req.ClientId)
 			if err != nil {
 				return &gen.JoinChatResponse{}, err
 			}
+			fmt.Println("Old group chat state : ")
+			g.printGroupChatState(req.OldGroupName)
 		}
 	}
 
@@ -108,7 +167,7 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 	g.mu.Unlock()
 
 	// persist user information on file
-	fileName := "../data/" + req.NewGroupName + "/users.json"
+	fileName := filePrefix + req.NewGroupName + "/users.json"
 	err := g.persistDataOnFile(fileName, g.groupState[req.NewGroupName].Users)
 	if err != nil {
 		fmt.Println("Failed to persist group user information for group "+req.NewGroupName, err)
@@ -120,7 +179,7 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		go g.updateJoinChatOnOtherServers(req)
 	}
 
-	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
+	g.printGroupChatState(req.NewGroupName)
 	return &gen.JoinChatResponse{}, nil
 }
 
@@ -144,7 +203,7 @@ func (g *groupChatServer) validateGroupMembership(groupName, userName, clientID 
 }
 
 func (g *groupChatServer) persistGroupUser(users map[string]int32, groupName string) error {
-	fileName := "../data/" + groupName + "_users.json"
+	fileName := filePrefix + groupName + "_users.json"
 
 	// convert user map to json
 	usersJson, err := json.Marshal(users)
@@ -163,69 +222,21 @@ func (g *groupChatServer) persistGroupUser(users map[string]int32, groupName str
 	return nil
 }
 
-func (g *groupChatServer) updateJoinChatOnOtherServers(joinChatRequest *gen.JoinChatRequest) error {
-	for i := 0; i < 5; i++ {
-		_, ok := g.connectedServers[int32(i+1)]
-		// for server ids not in connectedServers
-		if !ok && int32(i+1) != g.serverID {
-
-			// change join Request object to struct
-			appendObject := map[string]interface{}{
-				"NewGroupName": joinChatRequest.NewGroupName,
-				"OldGroupName": joinChatRequest.OldGroupName,
-				"UserName":     joinChatRequest.UserName,
-				"RequestType":  joinChatRequest.RequestType,
-				"ClientId":     joinChatRequest.ClientId,
-			}
-
-			// open file for reading all json updates
-			fileName := "../data/Updates/" + strconv.Itoa(int(g.serverID)) + "/updateServer" + strconv.Itoa(i+1) + ".json"
-
-			var result []byte
-
-			// unmarshal all json updates
-			var updates []map[string]interface{}
-			byteValue, _ := os.ReadFile(fileName)
-			if byteValue[0] == uint8(0) {
-				result, _ = json.Marshal(appendObject)
-			} else {
-				err := json.Unmarshal(byteValue, &updates)
-				if err != nil {
-					log.Fatalf("Error during Unmarshalling updates for server update %d", i+1, err)
-				}
-				// append new update
-				updates = append(updates, appendObject)
-
-				//marshall all json
-				result, err = json.Marshal(updates)
-				if err != nil {
-					fmt.Println("Error during marshalling all json updates", err)
-				}
-			}
-
-			// over-write the user JSON to the file
-			err := os.WriteFile(fileName, result, 0644)
+func (g *groupChatServer) updateJoinChatOnOtherServers(req *gen.JoinChatRequest) {
+	var i int32
+	for i = 1; i <= 5; i++ {
+		serverToUpdate := i
+		if client, ok := g.connectedServers[serverToUpdate]; ok {
+			_, err := client.JoinChat(context.Background(), req)
 			if err != nil {
-				fmt.Println("Error while persisting user information for group "+joinChatRequest.NewGroupName, err)
-				return err
+				fmt.Println("Error updating JoinChat on serverId "+strconv.Itoa(int(serverToUpdate)), err)
+				// save the update in the corresponding server’s file
+				go g.saveUnsentUpdate(serverToUpdate, req)
 			}
-		} else if ok {
-			// update for server in connectedServers
-			groupChatClient, ok := g.connectedServers[int32(i+1)]
-			if !ok {
-				log.Fatalf("Server not in connectedServers")
-			}
-			_, err := groupChatClient.JoinChat(context.Background(), joinChatRequest)
-			if err != nil {
-				fmt.Println("Error updating group user information on serverId "+strconv.Itoa(i+1), err)
-				// TODO: add same code from above
-			} else {
-				fmt.Println("Successfully updated server " + strconv.Itoa(i+1) + " about user " +
-					joinChatRequest.UserName + " joining group " + joinChatRequest.NewGroupName)
-			}
+		} else if serverToUpdate != g.serverID {
+			go g.saveUnsentUpdate(serverToUpdate, req)
 		}
 	}
-	return nil
 }
 
 /*
@@ -246,9 +257,6 @@ func (g *groupChatServer) addUserToGroup(userName, groupName, clientID string) {
 		users[userName] = &client
 		g.groupUpdatesChan <- groupName
 	}
-
-	fmt.Printf("User %s added to the group %s with %s client ID", userName, groupName, clientID)
-	fmt.Println()
 }
 
 /*
@@ -275,7 +283,7 @@ func (g *groupChatServer) removeUserFromGroup(userName, groupName, clientID stri
 	}
 
 	// persist user information on file
-	fileName := "../data/" + groupName + "/users.json"
+	fileName := filePrefix + groupName + "/users.json"
 	err := g.persistDataOnFile(fileName, g.groupState[groupName].Users)
 	if err != nil {
 		fmt.Println("Failed to persist group user information for group "+groupName, err)
@@ -292,8 +300,6 @@ func (g *groupChatServer) createGroup(groupName string, groupState map[string]*g
 	}
 
 	groupState[groupName] = groupData
-	fmt.Println("Created group " + groupName)
-	fmt.Printf("groupState[%s]: %v\n", groupName, groupState[groupName])
 }
 
 func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatRequest) (*gen.AppendChatResponse, error) {
@@ -301,19 +307,20 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 		return nil, errors.New("UserName cannot be empty")
 	} else if req.GroupName == "" {
 		return nil, errors.New("group name cannot be empty")
-	} else if req.MessageId != "" {
-		return nil, nil
+	} else if req.MessageId != "" && g.messageAlreadyExists(req.MessageId, req.GroupName) {
+		return &gen.AppendChatResponse{}, nil
 	}
 
 	// check if the user belongs to the group
 	groupData, ok := g.groupState[req.GroupName]
-
-	if _, found := groupData.Users[req.UserName]; !found {
-		return nil, errors.New("user doesn't belong to group")
+	if ok {
+		if _, found := groupData.Users[req.UserName]; !found {
+			return nil, errors.New("user doesn't belong to group")
+		}
 	}
 
 	if ok {
-		messageID, err := g.createMessage(req.UserName, req.GroupName, req.Message)
+		messageID, err := g.createMessage(req.UserName, req.GroupName, req.Message, req.MessageId)
 		if err != nil {
 			return nil, errors.New("failed to append message from user " + req.UserName + " in group " +
 				req.GroupName)
@@ -325,29 +332,45 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 			go g.updateAppendChatOnOtherServers(req)
 		}
 
-		fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
+		g.printGroupChatState(req.GroupName)
 		return &gen.AppendChatResponse{}, nil
 	} else {
 		return nil, errors.New("group not found")
 	}
 }
 
+func (g *groupChatServer) messageAlreadyExists(messageID, groupName string) bool {
+	if _, ok := g.groupState[groupName]; ok {
+		if _, ok := g.groupState[groupName].Messages[messageID]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (g *groupChatServer) updateAppendChatOnOtherServers(req *gen.AppendChatRequest) {
-	for serverId, groupChatClient := range g.connectedServers {
-		_, err := groupChatClient.AppendChat(context.Background(), req)
-		if err != nil {
-			fmt.Println("Error updating AppendChat on server "+strconv.Itoa(int(serverId)), err)
-			// TODO append this update at the end of file {serverID}
-		} else {
-			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverId)) +
-				" with message ID " + req.MessageId)
+	var i int32
+	for i = 1; i <= 5; i++ {
+		serverToUpdate := i
+		if client, ok := g.connectedServers[serverToUpdate]; ok {
+			_, err := client.AppendChat(context.Background(), req)
+			if err != nil {
+				fmt.Println("Error updating AppendChat on serverId "+strconv.Itoa(int(serverToUpdate)), err)
+				// save the update in the corresponding server’s file
+				go g.saveUnsentUpdate(serverToUpdate, req)
+			}
+		} else if serverToUpdate != g.serverID {
+			go g.saveUnsentUpdate(serverToUpdate, req)
 		}
 	}
 }
 
-func (g *groupChatServer) createMessage(userName, groupName, message string) (string, error) {
+func (g *groupChatServer) createMessage(userName, groupName, message, messageId string) (string, error) {
 	// update messages in memory
-	messageId := uuid.New().String()
+	if messageId == "" {
+		messageId = uuid.New().String()
+	}
 	messageObject := &gen.Message{
 		MessageId: messageId,
 		Message:   message,
@@ -362,7 +385,7 @@ func (g *groupChatServer) createMessage(userName, groupName, message string) (st
 	g.mu.Unlock()
 
 	// persist the message
-	fileName := "../data/" + groupName + "/messages/" + messageId + ".json"
+	fileName := filePrefix + groupName + "/messages/" + messageId + ".json"
 	err := g.persistDataOnFile(fileName, messageObject)
 	if err != nil {
 		fmt.Println("Failed to persist message "+messageId, err)
@@ -371,7 +394,6 @@ func (g *groupChatServer) createMessage(userName, groupName, message string) (st
 
 	// update clients
 	g.groupUpdatesChan <- groupName
-	fmt.Println("Created message " + message + " by user " + userName + " in group " + groupName)
 	return messageId, nil
 }
 
@@ -428,7 +450,7 @@ func (g *groupChatServer) appendMessageInOrder(messageOrder []string, newMessage
 	g.groupState[groupName].MessageOrder = newMessageOrder
 
 	// persist the message order
-	fileName := "../data/" + groupName + "/messageOrder.json"
+	fileName := filePrefix + groupName + "/messageOrder.json"
 	err := g.persistDataOnFile(fileName, newMessageOrder)
 	if err != nil {
 		fmt.Println("Failed to persist message order ", err)
@@ -492,20 +514,24 @@ func (g *groupChatServer) LikeChat(_ context.Context, req *gen.LikeChatRequest) 
 		// If the user likes any of the last 10 messages then the client screen should be refreshed
 		g.groupUpdatesChan <- req.GroupName
 	}
-	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
+	g.printGroupChatState(req.GroupName)
 
 	return &gen.LikeChatResponse{}, nil
 }
 
 func (g *groupChatServer) updateLikeChatOnOtherServers(req *gen.LikeChatRequest) {
-	for serverId, groupChatClient := range g.connectedServers {
-		_, err := groupChatClient.LikeChat(context.Background(), req)
-		if err != nil {
-			fmt.Println("Error updating LikeChat on server "+strconv.Itoa(int(serverId)), err)
-			// TODO append this update at the end of file {serverID}
-		} else {
-			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverId)) +
-				" with LikeChat for message " + g.groupState[req.GroupName].MessageOrder[req.MessagePos])
+	var i int32
+	for i = 1; i <= 5; i++ {
+		serverToUpdate := i
+		if client, ok := g.connectedServers[serverToUpdate]; ok {
+			_, err := client.LikeChat(context.Background(), req)
+			if err != nil {
+				fmt.Println("Error updating LikeChat on serverId "+strconv.Itoa(int(serverToUpdate)), err)
+				// save the update in the corresponding server’s file
+				go g.saveUnsentUpdate(serverToUpdate, req)
+			}
+		} else if serverToUpdate != g.serverID {
+			go g.saveUnsentUpdate(serverToUpdate, req)
 		}
 	}
 }
@@ -534,7 +560,7 @@ func (g *groupChatServer) updateMessageReaction(messageID, userName, groupName, 
 	}
 
 	// persist the message
-	fileName := "../data/" + groupName + "/messages/" + messageID + ".json"
+	fileName := filePrefix + groupName + "/messages/" + messageID + ".json"
 	err := g.persistDataOnFile(fileName, g.groupState[groupName].Messages[messageID])
 	if err != nil {
 		fmt.Println("Failed to persist message "+messageID, err)
@@ -580,19 +606,24 @@ func (g *groupChatServer) RemoveLike(_ context.Context, req *gen.RemoveLikeReque
 	if int(req.MessagePos) <= len(groupChat.Messages) && int(req.MessagePos) > len(groupChat.Messages)-10 {
 		g.groupUpdatesChan <- req.GroupName
 	}
-	fmt.Println("Group chat state " + fmt.Sprint(g.groupState))
+
+	g.printGroupChatState(req.GroupName)
 	return &gen.RemoveLikeResponse{}, nil
 }
 
 func (g *groupChatServer) updateRemoveLikeOnOtherServers(req *gen.RemoveLikeRequest) {
-	for serverId, groupChatClient := range g.connectedServers {
-		_, err := groupChatClient.RemoveLike(context.Background(), req)
-		if err != nil {
-			fmt.Println("Error updating RemoveLike on server "+strconv.Itoa(int(serverId)), err)
-			// TODO append this update at the end of file {serverID}
-		} else {
-			fmt.Println("Successfully updated server " + strconv.Itoa(int(serverId)) +
-				" with RemoveLike for message " + g.groupState[req.GroupName].MessageOrder[req.MessagePos])
+	var i int32
+	for i = 1; i <= 5; i++ {
+		serverToUpdate := i
+		if client, ok := g.connectedServers[serverToUpdate]; ok {
+			_, err := client.RemoveLike(context.Background(), req)
+			if err != nil {
+				fmt.Println("Error updating RemoveLike on serverId "+strconv.Itoa(int(serverToUpdate)), err)
+				// save the update in the corresponding server’s file
+				go g.saveUnsentUpdate(serverToUpdate, req)
+			}
+		} else if serverToUpdate != g.serverID {
+			go g.saveUnsentUpdate(serverToUpdate, req)
 		}
 	}
 }
@@ -683,13 +714,11 @@ func (g *groupChatServer) AddClient(stream gen.GroupChat_SubscribeToGroupUpdates
 		UserName:  "",
 		GroupName: "",
 	}
-	log.Printf("Client added, total clients: %d\n", len(g.clients))
 }
 
 func (g *groupChatServer) RemoveClient(stream gen.GroupChat_SubscribeToGroupUpdatesServer) {
 	client := stream
 	delete(g.clients, client)
-	log.Printf("Client removed, total clients: %d\n", len(g.clients))
 }
 
 /*
@@ -711,7 +740,6 @@ func validateUser(userName, groupName string, g *groupChatServer) bool {
 func (g *groupChatServer) sendGroupUpdatesToClients() {
 	for {
 		groupUpdated := <-g.groupUpdatesChan
-		fmt.Println("group update received for group " + groupUpdated + ". Pushing the update to the clients")
 		for client := range g.clients {
 			if err := client.Send(&gen.GroupUpdates{GroupUpdated: groupUpdated}); err != nil {
 				fmt.Println("Failed to send group updates for group : "+groupUpdated, err)
@@ -723,78 +751,137 @@ func (g *groupChatServer) sendGroupUpdatesToClients() {
 func (g *groupChatServer) healthcheckCall() {
 	for {
 		for i := 0; i < 5; i++ {
-			if int32(i+1) != g.serverID {
+			checkServerID := i + 1
+			if int32(checkServerID) != g.serverID {
 				var err error
 				var conn *grpc.ClientConn
 				var client gen.GroupChatClient
 
-				client, ok := g.connectedServers[int32(i+1)]
+				client, ok := g.connectedServers[int32(checkServerID)]
 				if !ok {
 					conn, _ = grpc.Dial(g.allServers[i], grpc.WithTransportCredentials(insecure.NewCredentials()))
 					client = gen.NewGroupChatClient(conn)
 				}
 				_, err = client.HealthCheck(context.Background(), &gen.HealthCheckRequest{})
 				if err != nil {
-					//fmt.Printf("Server not able to connect to Server %d\n", i+1)
-					if _, ok := g.connectedServers[int32(i+1)]; ok {
-						delete(g.connectedServers, int32(i+1))
+					//fmt.Printf("Server not able to connect to Server %d\n", checkServerID)
+					if _, ok := g.connectedServers[int32(checkServerID)]; ok {
+						delete(g.connectedServers, int32(checkServerID))
 					}
 				} else {
-					//fmt.Printf("Server connected to Server %d\n", i+1)
-					g.connectedServers[int32(i+1)] = client
-					//fmt.Printf("Added server %d to connectedServers map\n", i+1)
+					//fmt.Printf("Server connected to Server %d\n", checkServerID)
+					g.connectedServers[int32(checkServerID)] = client
+					//fmt.Printf("Added server %d to connectedServers map\n", checkServerID)
 				}
 
 				//fmt.Print("Connected servers: ")
 				//fmt.Println(g.connectedServers)
 			}
 		}
-		fmt.Print("Connected servers: ")
-		fmt.Println(g.connectedServers)
 		time.Sleep(1 * time.Second)
 	}
 }
 
+func (g *groupChatServer) updateNewlyConnectedServers() {
+	for {
+		if len(g.updateServers) > 0 {
+			for _, serverID := range g.updateServers {
+				fileName := filePrefix + "updates/updateServer" + serverID + ".json"
+
+				// Read the JSON data from file
+				updateArr, err := os.ReadFile(fileName)
+				if err != nil {
+					panic(err)
+				}
+
+				// Unmarshal the JSON data into an array of generic maps
+				var updateObjects []map[string]interface{}
+				if err := json.Unmarshal(updateArr, &updateObjects); err != nil {
+					panic(err)
+				}
+
+				// Iterate through the updateObjects and cast them to the correct type
+				for _, obj := range updateObjects {
+					// Extract the type field
+					typeStr := obj["requestType"].(string)
+
+					// Get the request object and update the newly connected server
+					switch typeStr {
+					case "1":
+						joinChatRequest := &gen.JoinChatRequest{
+							NewGroupName: obj["newGroupName"].(string),
+							OldGroupName: obj["oldGroupName"].(string),
+							UserName:     obj["userName"].(string),
+						}
+						fmt.Println("Updating newly connected server "+serverID+" with JoinChatRequest : ",
+							joinChatRequest)
+						g.updateJoinChatOnOtherServers(joinChatRequest)
+					default:
+						fmt.Printf("Unknown type: %s\n", typeStr)
+					}
+
+					// TODO remove this update from the array
+
+				}
+
+				// TODO once all updates are sent, remove this server ID from updateServers
+				// write the contents back to the file
+			}
+		}
+
+		time.Sleep(2 * time.Minute)
+	}
+}
+
 func (g *groupChatServer) HealthCheck(_ context.Context, request *gen.HealthCheckRequest) (*gen.HealthCheckResponse, error) {
-	fmt.Printf("\n***Entered HealthCheck function***\n\n")
 	return &gen.HealthCheckResponse{}, nil
 }
 
 func (g *groupChatServer) initializeAllServers() {
 	g.allServers = []string{"localhost:50051", "localhost:50052", "localhost:50053", "localhost:50054", "localhost:50055"}
 	g.connectedServers = make(map[int32]gen.GroupChatClient)
-
-	// TODO for testing multiple servers use case. Remove after testing done
-	//if g.serverID == 1 {
-	//	conn, err := grpc.Dial(g.allServers[1], grpc.WithTransportCredentials(insecure.NewCredentials()))
-	//	if err != nil {
-	//		log.Fatal("dialing:", err)
-	//	}
-	//	g.connectedServers[2] = gen.NewGroupChatClient(conn)
-	//	fmt.Println("Connection with server 2 established successfully")
-	//}
-	// till here
-
 	g.updateServers = make([]string, 0)
 }
 
 func (g *groupChatServer) createUpdateFiles() {
-	for i := 0; i < 5; i++ {
-		if int32(i+1) != g.serverID {
-			fileName := "../data/Updates/" + strconv.Itoa(int(g.serverID)) + "/updateServer" + strconv.Itoa(i+1) + ".json"
+	for i := 1; i <= 5; i++ {
+		if int32(i) != g.serverID {
+			fileName := filePrefix + "updates/updateServer" + strconv.Itoa(i) + ".json"
 
 			// Create directories if they don't exist
 			err := os.MkdirAll(filepath.Dir(fileName), os.ModePerm)
 			if err != nil {
 				fmt.Println("Failed to create directory "+filepath.Dir(fileName), err)
 			}
-			_, err = os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			_, err = os.Create(fileName)
 			if err != nil {
 				panic(err)
 			}
 		}
 	}
-	// TODO: Need to close the files at some point
+}
+
+func (g *groupChatServer) printGroupChatState(groupName string) {
+	groupData, ok := g.groupState[groupName]
+	fmt.Println()
+	fmt.Println("::::::::Group chat state::::::::")
+	fmt.Println()
+	if ok {
+		fmt.Print("Users: ")
+		for userName, _ := range groupData.Users {
+			fmt.Print(userName + ", ")
+		}
+		fmt.Println()
+
+		for index, messageID := range groupData.MessageOrder {
+			message, ok := groupData.Messages[messageID]
+			if ok {
+				fmt.Println(strconv.Itoa(index) + ". " + message.Owner + " : " + message.Message +
+					"   Likes : " + strconv.Itoa(len(message.Likes)))
+			}
+		}
+	}
+	fmt.Println("::::::::::::::::")
 }
 
 func (g *groupChatServer) createGroupChatState() {
@@ -833,6 +920,7 @@ func main() {
 	groupUpdatesChan := make(chan string)
 	args := os.Args
 	serverId, _ := strconv.ParseInt(args[2], 10, 32)
+	filePrefix = "../data/" + strconv.FormatInt(serverId, 10) + "/"
 	// Register your server implementation with the gRPC server
 	srv := &groupChatServer{
 		groupState:       make(map[string]*gen.GroupData),
@@ -845,6 +933,7 @@ func main() {
 	srv.initializeAllServers()
 	go srv.healthcheckCall()
 	srv.createUpdateFiles()
+	go srv.updateNewlyConnectedServers()
 
 	// Start the gRPC server
 	fmt.Println("Starting gRPC server on port 50051...")
