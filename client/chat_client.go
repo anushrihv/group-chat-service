@@ -136,6 +136,7 @@ func login(newUserName string, client gen.GroupChatClient) string {
 		OldUserName:  userName,
 		OldGroupName: groupName,
 		ClientId:     clientID,
+		RequestType:  gen.REQUEST_TYPE_LOGIN,
 	}
 
 	_, err := client.Login(context.Background(), &loginRequest)
@@ -161,7 +162,7 @@ func joinGroupChat(userName, oldGroupName, newGroupName string, client gen.Group
 		NewGroupName: newGroupName,
 		OldGroupName: oldGroupName,
 		UserName:     userName,
-		RequestType:  0,
+		RequestType:  gen.REQUEST_TYPE_JOIN_CHAT,
 		ClientId:     clientID,
 	}
 
@@ -181,7 +182,7 @@ func appendChat(userName, groupName, message string, client gen.GroupChatClient)
 		UserName:    userName,
 		GroupName:   groupName,
 		Message:     message,
-		RequestType: 1,
+		RequestType: gen.REQUEST_TYPE_APPEND,
 		ClientId:    clientID,
 	}
 
@@ -198,7 +199,7 @@ func likeChat(userName, groupName string, messagePos int32, client gen.GroupChat
 		UserName:    userName,
 		GroupName:   groupName,
 		MessagePos:  messagePos,
-		RequestType: 2,
+		RequestType: gen.REQUEST_TYPE_LIKE,
 		ClientId:    clientID,
 	}
 
@@ -215,7 +216,7 @@ func removeLikeChat(userName, groupName string, messagePos int32, client gen.Gro
 		UserName:    userName,
 		GroupName:   groupName,
 		MessagePos:  messagePos,
-		RequestType: 3,
+		RequestType: gen.REQUEST_TYPE_UNLIKE,
 		ClientId:    clientID,
 	}
 
