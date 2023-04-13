@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"sync"
 	"time"
@@ -29,7 +30,6 @@ type groupChatServer struct {
 	serverID         int32
 	allServers       []string
 	connectedServers map[int32]gen.GroupChatClient
-	updateServers    []string
 }
 
 var filePrefix string
@@ -128,6 +128,19 @@ func (g *groupChatServer) objectToMap(obj interface{}) (map[string]interface{}, 
 		return nil, err
 	}
 	return data, nil
+}
+
+func (g *groupChatServer) mapToObject(data map[string]interface{}, t reflect.Type) (interface{}, error) {
+	obj := reflect.New(t.Elem()).Interface() // get the type's underlying struct type
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(bytes, obj)
+	if err != nil {
+		return nil, err
+	}
+	return obj, nil
 }
 
 func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) (*gen.JoinChatResponse, error) {
@@ -784,52 +797,123 @@ func (g *groupChatServer) healthcheckCall() {
 
 func (g *groupChatServer) updateNewlyConnectedServers() {
 	for {
-		if len(g.updateServers) > 0 {
-			for _, serverID := range g.updateServers {
-				fileName := filePrefix + "updates/updateServer" + serverID + ".json"
-
-				// Read the JSON data from file
-				updateArr, err := os.ReadFile(fileName)
-				if err != nil {
-					panic(err)
-				}
-
-				// Unmarshal the JSON data into an array of generic maps
-				var updateObjects []map[string]interface{}
-				if err := json.Unmarshal(updateArr, &updateObjects); err != nil {
-					panic(err)
-				}
-
-				// Iterate through the updateObjects and cast them to the correct type
-				for _, obj := range updateObjects {
-					// Extract the type field
-					typeStr := obj["requestType"].(string)
-
-					// Get the request object and update the newly connected server
-					switch typeStr {
-					case "1":
-						joinChatRequest := &gen.JoinChatRequest{
-							NewGroupName: obj["newGroupName"].(string),
-							OldGroupName: obj["oldGroupName"].(string),
-							UserName:     obj["userName"].(string),
-						}
-						fmt.Println("Updating newly connected server "+serverID+" with JoinChatRequest : ",
-							joinChatRequest)
-						g.updateJoinChatOnOtherServers(joinChatRequest)
-					default:
-						fmt.Printf("Unknown type: %s\n", typeStr)
-					}
-
-					// TODO remove this update from the array
-
-				}
-
-				// TODO once all updates are sent, remove this server ID from updateServers
-				// write the contents back to the file
+		for i := 1; i <= 5; i++ {
+			var serverToUpdate = i
+			if _, ok := g.connectedServers[int32(serverToUpdate)]; ok {
+				g.resendUnsentUpdates(serverToUpdate)
 			}
 		}
-
 		time.Sleep(2 * time.Minute)
+	}
+}
+
+func (g *groupChatServer) resendUnsentUpdates(serverToUpdate int) {
+	fileName := filePrefix + "updates/updateServer" + strconv.Itoa(serverToUpdate) + ".json"
+
+	// read file
+	byteArr, err := os.ReadFile(fileName)
+	if err != nil {
+		fmt.Println("failed to read file "+fileName, err)
+	}
+
+	if len(byteArr) > 0 {
+		var updateObjects []map[string]interface{}
+		// Unmarshal the JSON data into an array of generic maps
+		if err := json.Unmarshal(byteArr, &updateObjects); err != nil {
+			return
+		}
+
+		// check if there are any updates to send
+		if len(updateObjects) > 0 {
+			var update map[string]interface{}
+			var index int
+			for index, update = range updateObjects {
+				// get the update type
+				updateType, err := g.getUpdateType(update)
+				if err != nil {
+					fmt.Println("Failed to get the update type of the update ", err)
+					return
+				}
+
+				// convert update map to update object
+				updateObject, err := g.mapToObject(update, updateType)
+				if err != nil {
+					fmt.Println("Failed to convert update map to update object")
+				}
+
+				// depending on the updateType, send the right update
+				err = g.sendUpdateByUpdateType(updateObject, updateType, serverToUpdate)
+				if err != nil {
+					fmt.Println("Failed to send update to server "+strconv.Itoa(serverToUpdate), err)
+					index--
+					break
+				}
+			}
+
+			// remove all sent updates from the list
+			updateObjects = updateObjects[index+1:]
+
+			// Marshall it again
+			byteArr, err = json.Marshal(updateObjects)
+			if err != nil {
+				return
+			}
+
+			// Write it back to the file
+			err = os.WriteFile(fileName, byteArr, 0644)
+			if err != nil {
+				fmt.Println("Error while writing to file ", err)
+			}
+		}
+	}
+}
+
+func (g *groupChatServer) sendUpdateByUpdateType(updateObject interface{}, updateType reflect.Type, serverToUpdate int) error {
+	var joinChatRequest *gen.JoinChatRequest
+	var appendChatRequest *gen.AppendChatRequest
+	var likeChatRequest *gen.LikeChatRequest
+	var removeLikeRequest *gen.RemoveLikeRequest
+	var loginRequest *gen.LoginRequest
+
+	client, _ := g.connectedServers[int32(serverToUpdate)]
+
+	var err error = nil
+
+	switch updateType {
+	case reflect.TypeOf(&gen.JoinChatRequest{}):
+		joinChatRequest = updateObject.(*gen.JoinChatRequest)
+		_, err = client.JoinChat(context.Background(), joinChatRequest)
+	case reflect.TypeOf(&gen.AppendChatRequest{}):
+		appendChatRequest = updateObject.(*gen.AppendChatRequest)
+		_, err = client.AppendChat(context.Background(), appendChatRequest)
+	case reflect.TypeOf(&gen.LikeChatRequest{}):
+		likeChatRequest = updateObject.(*gen.LikeChatRequest)
+		_, err = client.LikeChat(context.Background(), likeChatRequest)
+	case reflect.TypeOf(&gen.RemoveLikeRequest{}):
+		removeLikeRequest = updateObject.(*gen.RemoveLikeRequest)
+		_, err = client.RemoveLike(context.Background(), removeLikeRequest)
+	case reflect.TypeOf(&gen.LoginRequest{}):
+		loginRequest = updateObject.(*gen.LoginRequest)
+		_, err = client.Login(context.Background(), loginRequest)
+	}
+
+	return err
+}
+
+func (g *groupChatServer) getUpdateType(update map[string]interface{}) (reflect.Type, error) {
+	switch update["request_type"].(float64) {
+	case float64(gen.REQUEST_TYPE_LOGIN):
+		return reflect.TypeOf(&gen.LoginRequest{}), nil
+	case float64(gen.REQUEST_TYPE_JOIN_CHAT):
+		return reflect.TypeOf(&gen.JoinChatRequest{}), nil
+	case float64(gen.REQUEST_TYPE_APPEND):
+		return reflect.TypeOf(&gen.AppendChatRequest{}), nil
+	case float64(gen.REQUEST_TYPE_LIKE):
+		return reflect.TypeOf(&gen.LikeChatRequest{}), nil
+	case float64(gen.REQUEST_TYPE_UNLIKE):
+		return reflect.TypeOf(&gen.RemoveLikeRequest{}), nil
+	default:
+		return nil, errors.New("invalid Update Type")
 	}
 }
 
@@ -840,7 +924,6 @@ func (g *groupChatServer) HealthCheck(_ context.Context, request *gen.HealthChec
 func (g *groupChatServer) initializeAllServers() {
 	g.allServers = []string{"localhost:50051", "localhost:50052", "localhost:50053", "localhost:50054", "localhost:50055"}
 	g.connectedServers = make(map[int32]gen.GroupChatClient)
-	g.updateServers = make([]string, 0)
 }
 
 func (g *groupChatServer) createUpdateFiles() {
@@ -864,7 +947,7 @@ func (g *groupChatServer) createUpdateFiles() {
 func (g *groupChatServer) printGroupChatState(groupName string) {
 	groupData, ok := g.groupState[groupName]
 	fmt.Println()
-	fmt.Println("::::::::Group chat state::::::::")
+	fmt.Println("::::::::Group " + groupName + "::::::::")
 	fmt.Println()
 	if ok {
 		fmt.Print("Users: ")
@@ -881,7 +964,7 @@ func (g *groupChatServer) printGroupChatState(groupName string) {
 			}
 		}
 	}
-	fmt.Println("::::::::::::::::")
+	fmt.Println()
 }
 
 func main() {

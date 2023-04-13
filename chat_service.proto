@@ -21,6 +21,7 @@ message LoginRequest {
   string old_group_name = 2;
   string new_user_name = 3;
   string client_id = 4;
+  REQUEST_TYPE request_type = 5;
 }
 
 message LoginResponse {
@@ -137,9 +138,11 @@ message Message {
 }
 
 enum REQUEST_TYPE{
-  JOIN_CHAT = 0;
-  APPEND = 1;
-  LIKE = 2;
-  UNLIKE = 3;
+  INVALID = 0;
+  LOGIN = 1;
+  JOIN_CHAT = 2;
+  APPEND = 3;
+  LIKE = 4;
+  UNLIKE = 5;
 }
 
