@@ -14,6 +14,7 @@ service GroupChat {
   rpc RefreshChat(RefreshChatRequest) returns (RefreshChatResponse) {}
   rpc SubscribeToGroupUpdates(stream ClientInformation) returns (stream GroupUpdates) {}
   rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse) {}
+  rpc PrintConnectedServers (PrintConnectedServersRequest) returns (PrintConnectedServersResponse) {}
 }
 
 message LoginRequest {
@@ -106,6 +107,14 @@ message HealthCheckRequest {
 
 message HealthCheckResponse {
 
+}
+
+message PrintConnectedServersRequest {
+
+}
+
+message PrintConnectedServersResponse {
+  repeated int32 server_ids = 1;
 }
 
 message ClientInformation {

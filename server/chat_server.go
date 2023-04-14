@@ -697,6 +697,15 @@ func (g *groupChatServer) RefreshChat(_ context.Context, request *gen.RefreshCha
 	return &refreshChatResponse, nil
 }
 
+func (g *groupChatServer) PrintConnectedServers(_ context.Context, req *gen.PrintConnectedServersRequest) (*gen.PrintConnectedServersResponse, error) {
+	serverIDs := make([]int32, 0)
+	for serverID, _ := range g.connectedServers {
+		serverIDs = append(serverIDs, serverID)
+	}
+
+	return &gen.PrintConnectedServersResponse{ServerIds: serverIDs}, nil
+}
+
 func (g *groupChatServer) SubscribeToGroupUpdates(stream gen.GroupChat_SubscribeToGroupUpdatesServer) error {
 	g.AddClient(stream)
 
@@ -803,7 +812,7 @@ func (g *groupChatServer) updateNewlyConnectedServers() {
 				g.resendUnsentUpdates(serverToUpdate)
 			}
 		}
-		time.Sleep(2 * time.Minute)
+		time.Sleep(1 * time.Second)
 	}
 }
 
