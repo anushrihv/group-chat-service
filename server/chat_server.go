@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"group-chat-service/gen"
+	//"io"
 	"log"
 	"net"
 	"os"
@@ -132,6 +133,19 @@ func (g *groupChatServer) objectToMap(obj interface{}) (map[string]interface{}, 
 
 func (g *groupChatServer) mapToObject(data map[string]interface{}, t reflect.Type) (interface{}, error) {
 	obj := reflect.New(t.Elem()).Interface() // get the type's underlying struct type
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(bytes, obj)
+	if err != nil {
+		return nil, err
+	}
+	return obj, nil
+}
+
+func (g *groupChatServer) mapToObject2(data map[string]interface{}) (interface{}, error) {
+	var obj interface{}
 	bytes, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
@@ -967,28 +981,129 @@ func (g *groupChatServer) printGroupChatState(groupName string) {
 	fmt.Println()
 }
 
-func (g *groupChatServer) createGroupChatState() {
-	// read all server files one by one
-	for i := 0; i < 5; i++ {
-		if int32(i+1) != g.serverID {
-			fileName := "../data/Updates/" + strconv.Itoa(int(g.serverID)) + "/updateServer" + strconv.Itoa(i+1) + ".json"
-			// unmarshal all json updates
-			var updates []map[string]interface{}
-			byteValue, _ := os.ReadFile(fileName)
-			if byteValue[0] != uint8(0) {
-				err := json.Unmarshal(byteValue, &updates)
-				if err != nil {
-					log.Fatalf("Error during Unmarshalling updates for server update %d", i+1, err)
-				}
-				// iterating it
-				for _, v := range updates {
-
-					fmt.Println(v)
-				}
-			}
-
+func (g *groupChatServer) createGroupState() error {
+	// Opening the data directory
+	_, err := os.Stat(filePrefix)
+	// Create directory if it does not exist
+	if os.IsNotExist(err) {
+		// Create directories if they don't exist
+		err := os.MkdirAll(filepath.Dir(filePrefix), os.ModePerm)
+		if err != nil {
+			fmt.Println("Failed to create directory "+filepath.Dir(filePrefix), err)
+			return err
 		}
 	}
+
+	// Getting all group chat directory names
+	var groupChatNames []string
+	dir, err := os.ReadDir(filePrefix)
+	if err != nil {
+		return err
+	}
+	for _, file := range dir {
+		if file.Name() == "updates" {
+			// skip updates directory
+			continue
+		}
+		groupChatNames = append(groupChatNames, file.Name())
+	}
+
+	for _, group := range groupChatNames {
+		var groupData gen.GroupData
+		// Reading all files in the group chat folder
+		dir, err := os.ReadDir(filePrefix + "/" + group)
+		if err != nil {
+			return err
+		}
+		//Iterating through all files : users.json, messages, messageOrder.json
+		for _, file := range dir {
+			if file.IsDir() && file.Name() == "messages" {
+				//msgFiles, err := os.ReadDir(filePrefix + "/" + group + "/" + file.Name())
+				//if err != nil {
+				//	return err
+				//}
+				//// add all messages to the group chat state
+				//for _, msgFile := range msgFiles {
+				//	// read file
+				//	msgFileBytes, err := os.ReadFile(filePrefix + "/" + group + "/" + file.Name() + "/" + msgFile.Name())
+				//	if err != nil {
+				//		fmt.Println("failed to read message"+msgFile.Name(), err)
+				//	}
+				//	var msgObject map[string]interface{}
+				//	if len(msgFileBytes) > 0 {
+				//		// Unmarshal the JSON data into an array of generic maps
+				//		err := json.Unmarshal(msgFileBytes, &msgObject)
+				//		if err != nil {
+				//			fmt.Println("Error unmarshalling a message file", err)
+				//		}
+				//	}
+				//}
+			} else {
+				if file.Name() == "users.json" {
+					g.readUsersIntoGroupChatState(group, file.Name(), &groupData)
+					fmt.Println("Recovered data from database")
+					g.groupState[group] = &groupData
+					fmt.Println(g.groupState[group])
+				}
+				//if file.Name() == "messageOrder.json" {
+				//
+				//}
+			}
+		}
+	}
+	//for i := 0; i < 5; i++ {
+	//	if int32(i+1) != g.serverID {
+	//		fileName := filePrefix + "/updates" + "/updateServer" + strconv.Itoa(i+1) + ".json"
+	//		// unmarshal all json updates
+	//		var updates []map[string]interface{}
+	//		byteValue, _ := os.ReadFile(fileName)
+	//		if len(byteValue) > 0 {
+	//			err := json.Unmarshal(byteValue, &updates)
+	//			if err != nil {
+	//				log.Fatalf("Error during Unmarshalling updates for server update"+strconv.Itoa(i+1), err)
+	//			}
+	//			// iterating it
+	//			for _, v := range updates {
+	//
+	//				fmt.Println(v)
+	//			}
+	//		}
+	//
+	//	}
+	//}
+	return nil
+}
+
+func (g *groupChatServer) readUsersIntoGroupChatState(group string, file string, groupData *gen.GroupData) (gen.GroupData, error) {
+	// read file
+	fileBytes, err := os.ReadFile(filePrefix + "/" + group + "/" + file)
+	if err != nil {
+		fmt.Println("failed to read file "+file+"in the group"+group, err)
+	}
+	if len(fileBytes) > 0 {
+		var users map[string]interface{}
+		// Unmarshal the JSON data into an array of generic maps
+		err := json.Unmarshal(fileBytes, &users)
+		if err != nil {
+			fmt.Println("Error unmarshalling a group chat info file", err)
+			//return err
+		}
+		if len(users) > 0 {
+			for _, user := range users {
+				//for username, client := range user.(map[string]interface{}) {
+				//	client.(*gen.Client)
+				//}
+
+				groupData.Users = user.(map[string]*gen.Client)
+
+			}
+		}
+	}
+	return *groupData, nil
+}
+
+func readMessagesIntoGroupChatState() {
+
 }
 
 func main() {
@@ -1017,6 +1132,7 @@ func main() {
 	go srv.healthcheckCall()
 	srv.createUpdateFiles()
 	go srv.updateNewlyConnectedServers()
+	srv.createGroupState()
 
 	// Start the gRPC server
 	fmt.Println("Starting gRPC server on port 50051...")
