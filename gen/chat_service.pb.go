@@ -984,6 +984,91 @@ func (*HealthCheckResponse) Descriptor() ([]byte, []int) {
 	return file_chat_service_proto_rawDescGZIP(), []int{15}
 }
 
+type PrintConnectedServersRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *PrintConnectedServersRequest) Reset() {
+	*x = PrintConnectedServersRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_chat_service_proto_msgTypes[16]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PrintConnectedServersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrintConnectedServersRequest) ProtoMessage() {}
+
+func (x *PrintConnectedServersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_chat_service_proto_msgTypes[16]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrintConnectedServersRequest.ProtoReflect.Descriptor instead.
+func (*PrintConnectedServersRequest) Descriptor() ([]byte, []int) {
+	return file_chat_service_proto_rawDescGZIP(), []int{16}
+}
+
+type PrintConnectedServersResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	ServerIds []int32 `protobuf:"varint,1,rep,packed,name=server_ids,json=serverIds,proto3" json:"server_ids,omitempty"`
+}
+
+func (x *PrintConnectedServersResponse) Reset() {
+	*x = PrintConnectedServersResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_chat_service_proto_msgTypes[17]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PrintConnectedServersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrintConnectedServersResponse) ProtoMessage() {}
+
+func (x *PrintConnectedServersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_chat_service_proto_msgTypes[17]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrintConnectedServersResponse.ProtoReflect.Descriptor instead.
+func (*PrintConnectedServersResponse) Descriptor() ([]byte, []int) {
+	return file_chat_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *PrintConnectedServersResponse) GetServerIds() []int32 {
+	if x != nil {
+		return x.ServerIds
+	}
+	return nil
+}
+
 type ClientInformation struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -997,7 +1082,7 @@ type ClientInformation struct {
 func (x *ClientInformation) Reset() {
 	*x = ClientInformation{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_chat_service_proto_msgTypes[16]
+		mi := &file_chat_service_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1010,7 +1095,7 @@ func (x *ClientInformation) String() string {
 func (*ClientInformation) ProtoMessage() {}
 
 func (x *ClientInformation) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_service_proto_msgTypes[16]
+	mi := &file_chat_service_proto_msgTypes[18]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1023,7 +1108,7 @@ func (x *ClientInformation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientInformation.ProtoReflect.Descriptor instead.
 func (*ClientInformation) Descriptor() ([]byte, []int) {
-	return file_chat_service_proto_rawDescGZIP(), []int{16}
+	return file_chat_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ClientInformation) GetUserName() string {
@@ -1058,7 +1143,7 @@ type GroupUpdates struct {
 func (x *GroupUpdates) Reset() {
 	*x = GroupUpdates{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_chat_service_proto_msgTypes[17]
+		mi := &file_chat_service_proto_msgTypes[19]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1071,7 +1156,7 @@ func (x *GroupUpdates) String() string {
 func (*GroupUpdates) ProtoMessage() {}
 
 func (x *GroupUpdates) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_service_proto_msgTypes[17]
+	mi := &file_chat_service_proto_msgTypes[19]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1084,7 +1169,7 @@ func (x *GroupUpdates) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GroupUpdates.ProtoReflect.Descriptor instead.
 func (*GroupUpdates) Descriptor() ([]byte, []int) {
-	return file_chat_service_proto_rawDescGZIP(), []int{17}
+	return file_chat_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GroupUpdates) GetGroupUpdated() string {
@@ -1107,7 +1192,7 @@ type GroupData struct {
 func (x *GroupData) Reset() {
 	*x = GroupData{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_chat_service_proto_msgTypes[18]
+		mi := &file_chat_service_proto_msgTypes[20]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1120,7 +1205,7 @@ func (x *GroupData) String() string {
 func (*GroupData) ProtoMessage() {}
 
 func (x *GroupData) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_service_proto_msgTypes[18]
+	mi := &file_chat_service_proto_msgTypes[20]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1133,7 +1218,7 @@ func (x *GroupData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GroupData.ProtoReflect.Descriptor instead.
 func (*GroupData) Descriptor() ([]byte, []int) {
-	return file_chat_service_proto_rawDescGZIP(), []int{18}
+	return file_chat_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GroupData) GetUsers() map[string]*Client {
@@ -1168,7 +1253,7 @@ type Client struct {
 func (x *Client) Reset() {
 	*x = Client{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_chat_service_proto_msgTypes[19]
+		mi := &file_chat_service_proto_msgTypes[21]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1181,7 +1266,7 @@ func (x *Client) String() string {
 func (*Client) ProtoMessage() {}
 
 func (x *Client) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_service_proto_msgTypes[19]
+	mi := &file_chat_service_proto_msgTypes[21]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1194,7 +1279,7 @@ func (x *Client) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Client.ProtoReflect.Descriptor instead.
 func (*Client) Descriptor() ([]byte, []int) {
-	return file_chat_service_proto_rawDescGZIP(), []int{19}
+	return file_chat_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Client) GetClients() map[string]bool {
@@ -1220,7 +1305,7 @@ type Message struct {
 func (x *Message) Reset() {
 	*x = Message{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_chat_service_proto_msgTypes[20]
+		mi := &file_chat_service_proto_msgTypes[22]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1233,7 +1318,7 @@ func (x *Message) String() string {
 func (*Message) ProtoMessage() {}
 
 func (x *Message) ProtoReflect() protoreflect.Message {
-	mi := &file_chat_service_proto_msgTypes[20]
+	mi := &file_chat_service_proto_msgTypes[22]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1246,7 +1331,7 @@ func (x *Message) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Message.ProtoReflect.Descriptor instead.
 func (*Message) Descriptor() ([]byte, []int) {
-	return file_chat_service_proto_rawDescGZIP(), []int{20}
+	return file_chat_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *Message) GetMessageId() string {
@@ -1399,7 +1484,13 @@ var file_chat_service_proto_rawDesc = []byte{
 	0x61, 0x52, 0x09, 0x67, 0x72, 0x6f, 0x75, 0x70, 0x44, 0x61, 0x74, 0x61, 0x22, 0x14, 0x0a, 0x12,
 	0x48, 0x65, 0x61, 0x6c, 0x74, 0x68, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65,
 	0x73, 0x74, 0x22, 0x15, 0x0a, 0x13, 0x48, 0x65, 0x61, 0x6c, 0x74, 0x68, 0x43, 0x68, 0x65, 0x63,
-	0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x6c, 0x0a, 0x11, 0x43, 0x6c, 0x69,
+	0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x1e, 0x0a, 0x1c, 0x50, 0x72, 0x69,
+	0x6e, 0x74, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x65, 0x64, 0x53, 0x65, 0x72, 0x76, 0x65,
+	0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x3e, 0x0a, 0x1d, 0x50, 0x72, 0x69,
+	0x6e, 0x74, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x65, 0x64, 0x53, 0x65, 0x72, 0x76, 0x65,
+	0x72, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1d, 0x0a, 0x0a, 0x73, 0x65,
+	0x72, 0x76, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x05, 0x52, 0x09,
+	0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x49, 0x64, 0x73, 0x22, 0x6c, 0x0a, 0x11, 0x43, 0x6c, 0x69,
 	0x65, 0x6e, 0x74, 0x49, 0x6e, 0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x1b,
 	0x0a, 0x09, 0x75, 0x73, 0x65, 0x72, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
 	0x09, 0x52, 0x08, 0x75, 0x73, 0x65, 0x72, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x1d, 0x0a, 0x0a, 0x67,
@@ -1466,7 +1557,7 @@ var file_chat_service_proto_rawDesc = []byte{
 	0x05, 0x4c, 0x4f, 0x47, 0x49, 0x4e, 0x10, 0x01, 0x12, 0x0d, 0x0a, 0x09, 0x4a, 0x4f, 0x49, 0x4e,
 	0x5f, 0x43, 0x48, 0x41, 0x54, 0x10, 0x02, 0x12, 0x0a, 0x0a, 0x06, 0x41, 0x50, 0x50, 0x45, 0x4e,
 	0x44, 0x10, 0x03, 0x12, 0x08, 0x0a, 0x04, 0x4c, 0x49, 0x4b, 0x45, 0x10, 0x04, 0x12, 0x0a, 0x0a,
-	0x06, 0x55, 0x4e, 0x4c, 0x49, 0x4b, 0x45, 0x10, 0x05, 0x32, 0x88, 0x04, 0x0a, 0x09, 0x47, 0x72,
+	0x06, 0x55, 0x4e, 0x4c, 0x49, 0x4b, 0x45, 0x10, 0x05, 0x32, 0xe2, 0x04, 0x0a, 0x09, 0x47, 0x72,
 	0x6f, 0x75, 0x70, 0x43, 0x68, 0x61, 0x74, 0x12, 0x28, 0x0a, 0x05, 0x4c, 0x6f, 0x67, 0x69, 0x6e,
 	0x12, 0x0d, 0x2e, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
 	0x0e, 0x2e, 0x4c, 0x6f, 0x67, 0x69, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22,
@@ -1499,9 +1590,14 @@ var file_chat_service_proto_rawDesc = []byte{
 	0x74, 0x68, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x12, 0x13, 0x2e, 0x48, 0x65, 0x61, 0x6c, 0x74, 0x68,
 	0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x14, 0x2e, 0x48,
 	0x65, 0x61, 0x6c, 0x74, 0x68, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x22, 0x00, 0x42, 0x18, 0x5a, 0x16, 0x67, 0x72, 0x6f, 0x75, 0x70, 0x5f, 0x63, 0x68,
-	0x61, 0x74, 0x5f, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x2f, 0x67, 0x65, 0x6e, 0x62, 0x06,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x73, 0x65, 0x22, 0x00, 0x12, 0x58, 0x0a, 0x15, 0x50, 0x72, 0x69, 0x6e, 0x74, 0x43, 0x6f, 0x6e,
+	0x6e, 0x65, 0x63, 0x74, 0x65, 0x64, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x73, 0x12, 0x1d, 0x2e,
+	0x50, 0x72, 0x69, 0x6e, 0x74, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x65, 0x64, 0x53, 0x65,
+	0x72, 0x76, 0x65, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1e, 0x2e, 0x50,
+	0x72, 0x69, 0x6e, 0x74, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x65, 0x64, 0x53, 0x65, 0x72,
+	0x76, 0x65, 0x72, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x42, 0x18,
+	0x5a, 0x16, 0x67, 0x72, 0x6f, 0x75, 0x70, 0x5f, 0x63, 0x68, 0x61, 0x74, 0x5f, 0x73, 0x65, 0x72,
+	0x76, 0x69, 0x63, 0x65, 0x2f, 0x67, 0x65, 0x6e, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1517,57 +1613,59 @@ func file_chat_service_proto_rawDescGZIP() []byte {
 }
 
 var file_chat_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_chat_service_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_chat_service_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_chat_service_proto_goTypes = []interface{}{
-	(REQUEST_TYPE)(0),             // 0: REQUEST_TYPE
-	(*LoginRequest)(nil),          // 1: LoginRequest
-	(*LoginResponse)(nil),         // 2: LoginResponse
-	(*JoinChatRequest)(nil),       // 3: JoinChatRequest
-	(*JoinChatResponse)(nil),      // 4: JoinChatResponse
-	(*AppendChatRequest)(nil),     // 5: AppendChatRequest
-	(*AppendChatResponse)(nil),    // 6: AppendChatResponse
-	(*LikeChatRequest)(nil),       // 7: LikeChatRequest
-	(*LikeChatResponse)(nil),      // 8: LikeChatResponse
-	(*RemoveLikeRequest)(nil),     // 9: RemoveLikeRequest
-	(*RemoveLikeResponse)(nil),    // 10: RemoveLikeResponse
-	(*PrintHistoryRequest)(nil),   // 11: PrintHistoryRequest
-	(*PrintHistoryResponse)(nil),  // 12: PrintHistoryResponse
-	(*RefreshChatRequest)(nil),    // 13: RefreshChatRequest
-	(*RefreshChatResponse)(nil),   // 14: RefreshChatResponse
-	(*HealthCheckRequest)(nil),    // 15: HealthCheckRequest
-	(*HealthCheckResponse)(nil),   // 16: HealthCheckResponse
-	(*ClientInformation)(nil),     // 17: ClientInformation
-	(*GroupUpdates)(nil),          // 18: GroupUpdates
-	(*GroupData)(nil),             // 19: GroupData
-	(*Client)(nil),                // 20: Client
-	(*Message)(nil),               // 21: Message
-	nil,                           // 22: GroupData.UsersEntry
-	nil,                           // 23: GroupData.MessagesEntry
-	nil,                           // 24: Client.ClientsEntry
-	nil,                           // 25: Message.LikesEntry
-	nil,                           // 26: Message.UnlikesEntry
-	(*timestamppb.Timestamp)(nil), // 27: google.protobuf.Timestamp
+	(REQUEST_TYPE)(0),                     // 0: REQUEST_TYPE
+	(*LoginRequest)(nil),                  // 1: LoginRequest
+	(*LoginResponse)(nil),                 // 2: LoginResponse
+	(*JoinChatRequest)(nil),               // 3: JoinChatRequest
+	(*JoinChatResponse)(nil),              // 4: JoinChatResponse
+	(*AppendChatRequest)(nil),             // 5: AppendChatRequest
+	(*AppendChatResponse)(nil),            // 6: AppendChatResponse
+	(*LikeChatRequest)(nil),               // 7: LikeChatRequest
+	(*LikeChatResponse)(nil),              // 8: LikeChatResponse
+	(*RemoveLikeRequest)(nil),             // 9: RemoveLikeRequest
+	(*RemoveLikeResponse)(nil),            // 10: RemoveLikeResponse
+	(*PrintHistoryRequest)(nil),           // 11: PrintHistoryRequest
+	(*PrintHistoryResponse)(nil),          // 12: PrintHistoryResponse
+	(*RefreshChatRequest)(nil),            // 13: RefreshChatRequest
+	(*RefreshChatResponse)(nil),           // 14: RefreshChatResponse
+	(*HealthCheckRequest)(nil),            // 15: HealthCheckRequest
+	(*HealthCheckResponse)(nil),           // 16: HealthCheckResponse
+	(*PrintConnectedServersRequest)(nil),  // 17: PrintConnectedServersRequest
+	(*PrintConnectedServersResponse)(nil), // 18: PrintConnectedServersResponse
+	(*ClientInformation)(nil),             // 19: ClientInformation
+	(*GroupUpdates)(nil),                  // 20: GroupUpdates
+	(*GroupData)(nil),                     // 21: GroupData
+	(*Client)(nil),                        // 22: Client
+	(*Message)(nil),                       // 23: Message
+	nil,                                   // 24: GroupData.UsersEntry
+	nil,                                   // 25: GroupData.MessagesEntry
+	nil,                                   // 26: Client.ClientsEntry
+	nil,                                   // 27: Message.LikesEntry
+	nil,                                   // 28: Message.UnlikesEntry
+	(*timestamppb.Timestamp)(nil),         // 29: google.protobuf.Timestamp
 }
 var file_chat_service_proto_depIdxs = []int32{
 	0,  // 0: LoginRequest.request_type:type_name -> REQUEST_TYPE
 	0,  // 1: JoinChatRequest.request_type:type_name -> REQUEST_TYPE
 	0,  // 2: AppendChatRequest.request_type:type_name -> REQUEST_TYPE
 	0,  // 3: LikeChatRequest.request_type:type_name -> REQUEST_TYPE
-	27, // 4: LikeChatRequest.timestamp:type_name -> google.protobuf.Timestamp
+	29, // 4: LikeChatRequest.timestamp:type_name -> google.protobuf.Timestamp
 	0,  // 5: RemoveLikeRequest.request_type:type_name -> REQUEST_TYPE
-	27, // 6: RemoveLikeRequest.timestamp:type_name -> google.protobuf.Timestamp
-	19, // 7: PrintHistoryResponse.group_data:type_name -> GroupData
-	19, // 8: RefreshChatResponse.group_data:type_name -> GroupData
-	22, // 9: GroupData.users:type_name -> GroupData.UsersEntry
-	23, // 10: GroupData.messages:type_name -> GroupData.MessagesEntry
-	24, // 11: Client.clients:type_name -> Client.ClientsEntry
-	25, // 12: Message.likes:type_name -> Message.LikesEntry
-	27, // 13: Message.timestamp:type_name -> google.protobuf.Timestamp
-	26, // 14: Message.unlikes:type_name -> Message.UnlikesEntry
-	20, // 15: GroupData.UsersEntry.value:type_name -> Client
-	21, // 16: GroupData.MessagesEntry.value:type_name -> Message
-	27, // 17: Message.LikesEntry.value:type_name -> google.protobuf.Timestamp
-	27, // 18: Message.UnlikesEntry.value:type_name -> google.protobuf.Timestamp
+	29, // 6: RemoveLikeRequest.timestamp:type_name -> google.protobuf.Timestamp
+	21, // 7: PrintHistoryResponse.group_data:type_name -> GroupData
+	21, // 8: RefreshChatResponse.group_data:type_name -> GroupData
+	24, // 9: GroupData.users:type_name -> GroupData.UsersEntry
+	25, // 10: GroupData.messages:type_name -> GroupData.MessagesEntry
+	26, // 11: Client.clients:type_name -> Client.ClientsEntry
+	27, // 12: Message.likes:type_name -> Message.LikesEntry
+	29, // 13: Message.timestamp:type_name -> google.protobuf.Timestamp
+	28, // 14: Message.unlikes:type_name -> Message.UnlikesEntry
+	22, // 15: GroupData.UsersEntry.value:type_name -> Client
+	23, // 16: GroupData.MessagesEntry.value:type_name -> Message
+	29, // 17: Message.LikesEntry.value:type_name -> google.protobuf.Timestamp
+	29, // 18: Message.UnlikesEntry.value:type_name -> google.protobuf.Timestamp
 	1,  // 19: GroupChat.Login:input_type -> LoginRequest
 	3,  // 20: GroupChat.JoinChat:input_type -> JoinChatRequest
 	5,  // 21: GroupChat.AppendChat:input_type -> AppendChatRequest
@@ -1575,19 +1673,21 @@ var file_chat_service_proto_depIdxs = []int32{
 	9,  // 23: GroupChat.RemoveLike:input_type -> RemoveLikeRequest
 	11, // 24: GroupChat.PrintHistory:input_type -> PrintHistoryRequest
 	13, // 25: GroupChat.RefreshChat:input_type -> RefreshChatRequest
-	17, // 26: GroupChat.SubscribeToGroupUpdates:input_type -> ClientInformation
+	19, // 26: GroupChat.SubscribeToGroupUpdates:input_type -> ClientInformation
 	15, // 27: GroupChat.HealthCheck:input_type -> HealthCheckRequest
-	2,  // 28: GroupChat.Login:output_type -> LoginResponse
-	4,  // 29: GroupChat.JoinChat:output_type -> JoinChatResponse
-	6,  // 30: GroupChat.AppendChat:output_type -> AppendChatResponse
-	8,  // 31: GroupChat.LikeChat:output_type -> LikeChatResponse
-	10, // 32: GroupChat.RemoveLike:output_type -> RemoveLikeResponse
-	12, // 33: GroupChat.PrintHistory:output_type -> PrintHistoryResponse
-	14, // 34: GroupChat.RefreshChat:output_type -> RefreshChatResponse
-	18, // 35: GroupChat.SubscribeToGroupUpdates:output_type -> GroupUpdates
-	16, // 36: GroupChat.HealthCheck:output_type -> HealthCheckResponse
-	28, // [28:37] is the sub-list for method output_type
-	19, // [19:28] is the sub-list for method input_type
+	17, // 28: GroupChat.PrintConnectedServers:input_type -> PrintConnectedServersRequest
+	2,  // 29: GroupChat.Login:output_type -> LoginResponse
+	4,  // 30: GroupChat.JoinChat:output_type -> JoinChatResponse
+	6,  // 31: GroupChat.AppendChat:output_type -> AppendChatResponse
+	8,  // 32: GroupChat.LikeChat:output_type -> LikeChatResponse
+	10, // 33: GroupChat.RemoveLike:output_type -> RemoveLikeResponse
+	12, // 34: GroupChat.PrintHistory:output_type -> PrintHistoryResponse
+	14, // 35: GroupChat.RefreshChat:output_type -> RefreshChatResponse
+	20, // 36: GroupChat.SubscribeToGroupUpdates:output_type -> GroupUpdates
+	16, // 37: GroupChat.HealthCheck:output_type -> HealthCheckResponse
+	18, // 38: GroupChat.PrintConnectedServers:output_type -> PrintConnectedServersResponse
+	29, // [29:39] is the sub-list for method output_type
+	19, // [19:29] is the sub-list for method input_type
 	19, // [19:19] is the sub-list for extension type_name
 	19, // [19:19] is the sub-list for extension extendee
 	0,  // [0:19] is the sub-list for field type_name
@@ -1792,7 +1892,7 @@ func file_chat_service_proto_init() {
 			}
 		}
 		file_chat_service_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ClientInformation); i {
+			switch v := v.(*PrintConnectedServersRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1804,7 +1904,7 @@ func file_chat_service_proto_init() {
 			}
 		}
 		file_chat_service_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GroupUpdates); i {
+			switch v := v.(*PrintConnectedServersResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1816,7 +1916,7 @@ func file_chat_service_proto_init() {
 			}
 		}
 		file_chat_service_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GroupData); i {
+			switch v := v.(*ClientInformation); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1828,7 +1928,7 @@ func file_chat_service_proto_init() {
 			}
 		}
 		file_chat_service_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Client); i {
+			switch v := v.(*GroupUpdates); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1840,6 +1940,30 @@ func file_chat_service_proto_init() {
 			}
 		}
 		file_chat_service_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GroupData); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_chat_service_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Client); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_chat_service_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Message); i {
 			case 0:
 				return &v.state
@@ -1858,7 +1982,7 @@ func file_chat_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_chat_service_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   26,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
