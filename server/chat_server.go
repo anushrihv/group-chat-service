@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -1149,9 +1150,33 @@ func (g *groupChatServer) readMessageOrderFile(group string) error {
 	return nil
 }
 
+func getAddressFromArgs(serverId int64) string {
+	var address string
+
+	switch serverId {
+	case 1:
+		address = "localhost:50051"
+	case 2:
+		address = "localhost:50052"
+	case 3:
+		address = "localhost:50053"
+	case 4:
+		address = "localhost:50054"
+	case 5:
+		address = "localhost:50055"
+	}
+	return address
+}
+
 func main() {
+	args := os.Args
+	serverId, _ := strconv.ParseInt(args[2], 10, 32)
+	filePrefix = "../data/" + strconv.FormatInt(serverId, 10) + "/"
+
+	address := getAddressFromArgs(serverId)
+
 	// Create a TCP listener
-	lis, err := net.Listen("tcp", "localhost:50052")
+	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -1159,9 +1184,7 @@ func main() {
 	// Create a new gRPC server instance
 	s := grpc.NewServer()
 	groupUpdatesChan := make(chan string)
-	args := os.Args
-	serverId, _ := strconv.ParseInt(args[2], 10, 32)
-	filePrefix = "../data/" + strconv.FormatInt(serverId, 10) + "/"
+
 	// Register your server implementation with the gRPC server
 	srv := &groupChatServer{
 		groupState:       make(map[string]*gen.GroupData),
@@ -1183,7 +1206,7 @@ func main() {
 	}
 
 	// Start the gRPC server
-	fmt.Println("Starting gRPC server on port 50051...")
+	fmt.Println("Starting gRPC server on port " + strings.Split(address, ":")[1])
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
