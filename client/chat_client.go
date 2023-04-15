@@ -63,43 +63,69 @@ outer:
 				go listenToGroupUpdates(stream, client)
 			}
 		case "u":
-			if strings.Compare(userName, commandFields[1]) != 0 {
+			if client != nil && strings.Compare(userName, commandFields[1]) != 0 {
 				userName = login(commandFields[1], client)
 				groupName = ""
 				updateClientInformationOnServer(userName, groupName, stream)
+			} else if client == nil {
+				fmt.Println("Server connection has not been established")
 			} else {
 				fmt.Println("User is already logged in as " + userName)
 			}
 		case "j":
 			newGroupName := commandFields[1]
-			if strings.Compare(groupName, newGroupName) == 0 {
+			if client != nil && strings.Compare(groupName, newGroupName) == 0 {
 				fmt.Println("User has already joined the group " + newGroupName)
+			} else if client == nil {
+				fmt.Println("Server connection has not been established")
 			} else {
 				groupName = joinGroupChat(userName, groupName, newGroupName, client)
 				updateClientInformationOnServer(userName, newGroupName, stream)
 			}
 		case "a":
-			message := userCommand[2:len(userCommand)]
-			if userCommand[len(userCommand)-1:] == "\r" {
-				message = userCommand[2 : len(userCommand)-1]
+			if client == nil {
+				fmt.Println("Server connection has not been established")
+			} else {
+				message := userCommand[2:len(userCommand)]
+				if userCommand[len(userCommand)-1:] == "\r" {
+					message = userCommand[2 : len(userCommand)-1]
+				}
+				appendChat(userName, groupName, message, client)
 			}
-			appendChat(userName, groupName, message, client)
 		case "l":
-			messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
-			if err != nil {
-				fmt.Println("Invalid message id")
+			if client == nil {
+				fmt.Println("Server connection has not been established")
+			} else {
+				messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
+				if err != nil {
+					fmt.Println("Invalid message id")
+				}
+				messagePos := int32(messageId64)
+				likeChat(userName, groupName, messagePos, client)
 			}
-			messagePos := int32(messageId64)
-			likeChat(userName, groupName, messagePos, client)
 		case "r":
-			messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
-			if err != nil {
-				fmt.Println("Invalid message id")
+			if client == nil {
+				fmt.Println("Server connection has not been established")
+			} else {
+				messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
+				if err != nil {
+					fmt.Println("Invalid message id")
+				}
+				messagePos := int32(messageId64)
+				removeLikeChat(userName, groupName, messagePos, client)
 			}
-			messagePos := int32(messageId64)
-			removeLikeChat(userName, groupName, messagePos, client)
 		case "p":
-			printHistory(userName, groupName, client)
+			if client == nil {
+				fmt.Println("Server connection has not been established")
+			} else {
+				printHistory(userName, groupName, client)
+			}
+		case "v":
+			if client == nil {
+				fmt.Println("Server connection has not been established")
+			} else {
+				printConnectedServers(client)
+			}
 		case "q":
 			fmt.Println("exiting client")
 			conn.Close()
@@ -253,6 +279,19 @@ func printHistory(userName, groupName string, client gen.GroupChatClient) {
 		fmt.Println("Likes : ", len(message.Likes))
 	}
 
+}
+
+func printConnectedServers(client gen.GroupChatClient) {
+	req := &gen.PrintConnectedServersRequest{}
+	response, err := client.PrintConnectedServers(context.Background(), req)
+	if err != nil {
+		fmt.Println("Failed to get list of connected servers", err)
+	} else if len(response.ServerIds) == 0 {
+		fmt.Println("Server is not connected to any other server")
+	} else {
+		fmt.Print("Server is currently connected to the following servers : ")
+		fmt.Println(response.ServerIds)
+	}
 }
 
 func listenToGroupUpdates(stream gen.GroupChat_SubscribeToGroupUpdatesClient, client gen.GroupChatClient) {

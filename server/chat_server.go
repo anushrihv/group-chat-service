@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"group-chat-service/gen"
+	//"io"
 	"log"
 	"net"
 	"os"
@@ -143,6 +144,19 @@ func (g *groupChatServer) mapToObject(data map[string]interface{}, t reflect.Typ
 	return obj, nil
 }
 
+func (g *groupChatServer) mapToObject2(data map[string]interface{}) (interface{}, error) {
+	var obj interface{}
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(bytes, obj)
+	if err != nil {
+		return nil, err
+	}
+	return obj, nil
+}
+
 func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) (*gen.JoinChatResponse, error) {
 	if req.UserName == "" {
 		return nil, errors.New("UserName cannot be empty")
@@ -174,7 +188,7 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), req.ClientId)
 	} else {
 		// create the group since it does not exist
-		g.createGroup(req.GetNewGroupName(), g.groupState)
+		g.createGroup(req.GetNewGroupName())
 		g.addUserToGroup(req.GetUserName(), req.GetNewGroupName(), req.ClientId)
 	}
 	g.mu.Unlock()
@@ -306,13 +320,13 @@ func (g *groupChatServer) removeUserFromGroup(userName, groupName, clientID stri
 	return nil
 }
 
-func (g *groupChatServer) createGroup(groupName string, groupState map[string]*gen.GroupData) {
+func (g *groupChatServer) createGroup(groupName string) {
 	groupData := &gen.GroupData{
 		Users:    make(map[string]*gen.Client),
 		Messages: make(map[string]*gen.Message),
 	}
 
-	groupState[groupName] = groupData
+	g.groupState[groupName] = groupData
 }
 
 func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatRequest) (*gen.AppendChatResponse, error) {
@@ -697,6 +711,15 @@ func (g *groupChatServer) RefreshChat(_ context.Context, request *gen.RefreshCha
 	return &refreshChatResponse, nil
 }
 
+func (g *groupChatServer) PrintConnectedServers(_ context.Context, req *gen.PrintConnectedServersRequest) (*gen.PrintConnectedServersResponse, error) {
+	serverIDs := make([]int32, 0)
+	for serverID, _ := range g.connectedServers {
+		serverIDs = append(serverIDs, serverID)
+	}
+
+	return &gen.PrintConnectedServersResponse{ServerIds: serverIDs}, nil
+}
+
 func (g *groupChatServer) SubscribeToGroupUpdates(stream gen.GroupChat_SubscribeToGroupUpdatesServer) error {
 	g.AddClient(stream)
 
@@ -803,7 +826,7 @@ func (g *groupChatServer) updateNewlyConnectedServers() {
 				g.resendUnsentUpdates(serverToUpdate)
 			}
 		}
-		time.Sleep(2 * time.Minute)
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -967,9 +990,168 @@ func (g *groupChatServer) printGroupChatState(groupName string) {
 	fmt.Println()
 }
 
+func (g *groupChatServer) createGroupState() error {
+	// Opening the data directory
+	_, err := os.Stat(filePrefix)
+	// Create directory if it does not exist
+	if os.IsNotExist(err) {
+		// Create directories if they don't exist
+		err := os.MkdirAll(filepath.Dir(filePrefix), os.ModePerm)
+		if err != nil {
+			fmt.Println("Failed to create directory "+filepath.Dir(filePrefix), err)
+			return err
+		}
+	}
+
+	// Getting all groupName chat directory names
+	groupChatNames, err := g.getAllGroupChatNames()
+	if err != nil {
+		return err
+	}
+
+	for _, groupName := range groupChatNames {
+		g.createGroup(groupName)
+		// Reading all files in the groupName chat folder
+		contents, err := os.ReadDir(filePrefix + "/" + groupName)
+		if err != nil {
+			return err
+		}
+
+		// Iterating through all files : users.json, messages/, messageOrder.json
+		for _, file := range contents {
+			if file.IsDir() && file.Name() == "messages" {
+				err := g.readAllMessageFiles(groupName)
+				if err != nil {
+					fmt.Println("Failed to read message files", err)
+					return err
+				}
+			} else if file.Name() == "users.json" {
+				err := g.readUsersFile(groupName)
+				if err != nil {
+					fmt.Println("Failed to read users.json", err)
+					return err
+				}
+			} else if file.Name() == "messageOrder.json" {
+				err := g.readMessageOrderFile(groupName)
+				if err != nil {
+					fmt.Println("Failed to read messageOrder.json", err)
+					return err
+				}
+			}
+		}
+
+		g.printGroupChatState(groupName)
+	}
+	return nil
+}
+
+func (g *groupChatServer) getAllGroupChatNames() ([]string, error) {
+	var groupChatNames []string
+	dir, err := os.ReadDir(filePrefix)
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range dir {
+		if file.Name() == "updates" {
+			// skip updates directory
+			continue
+		}
+		groupChatNames = append(groupChatNames, file.Name())
+	}
+
+	return groupChatNames, nil
+}
+
+func (g *groupChatServer) readUsersFile(group string) error {
+	fileName := filePrefix + "/" + group + "/users.json"
+	// read file
+	fileBytes, err := os.ReadFile(fileName)
+	if err != nil {
+		fmt.Println("failed to read the users file for group"+group, err)
+		return err
+	}
+
+	if len(fileBytes) > 0 {
+		var usersMap map[string]interface{}
+		// Unmarshal the JSON data into usersMap map
+		err := json.Unmarshal(fileBytes, &usersMap)
+		if err != nil {
+			fmt.Println("Error unmarshalling usersMap.json", err)
+			return err
+		}
+
+		// Assign an empty clients map to each user
+		for username, _ := range usersMap {
+			clients := make(map[string]bool)
+			client := gen.Client{Clients: clients}
+			g.groupState[group].Users[username] = &client
+		}
+	}
+
+	return nil
+}
+
+func (g *groupChatServer) readAllMessageFiles(group string) error {
+	messagesFolderPath := filePrefix + "/" + group + "/messages/"
+	msgFiles, err := os.ReadDir(messagesFolderPath)
+	if err != nil {
+		return err
+	}
+
+	// add all messages to the groupName chat state
+	for _, msgFile := range msgFiles {
+		// read file
+		msgFileBytes, err := os.ReadFile(messagesFolderPath + msgFile.Name())
+		if err != nil {
+			return err
+		}
+
+		var msgObject gen.Message
+		if len(msgFileBytes) > 0 {
+			// Unmarshal the JSON data into an array of generic maps
+			err := json.Unmarshal(msgFileBytes, &msgObject)
+			if err != nil {
+				return err
+			}
+		}
+		if msgObject.Likes == nil {
+			msgObject.Likes = make(map[string]*timestamppb.Timestamp)
+		}
+		if msgObject.Unlikes == nil {
+			msgObject.Unlikes = make(map[string]*timestamppb.Timestamp)
+		}
+
+		g.groupState[group].Messages[msgObject.MessageId] = &msgObject
+	}
+
+	return nil
+}
+
+func (g *groupChatServer) readMessageOrderFile(group string) error {
+	fileName := filePrefix + "/" + group + "/messageOrder.json"
+	// read file
+	fileBytes, err := os.ReadFile(fileName)
+	if err != nil {
+		return err
+	}
+
+	if len(fileBytes) > 0 {
+		var messageOrder []string
+		// Unmarshal the JSON data into usersMap map
+		err := json.Unmarshal(fileBytes, &messageOrder)
+		if err != nil {
+			return err
+		}
+
+		g.groupState[group].MessageOrder = messageOrder
+	}
+
+	return nil
+}
+
 func main() {
 	// Create a TCP listener
-	lis, err := net.Listen("tcp", "localhost:50051")
+	lis, err := net.Listen("tcp", "localhost:50052")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -993,6 +1175,12 @@ func main() {
 	go srv.healthcheckCall()
 	srv.createUpdateFiles()
 	go srv.updateNewlyConnectedServers()
+	err = srv.createGroupState()
+	if err != nil {
+		fmt.Println("Failed to read group chat state from the files. The server may not behave as expected")
+		fmt.Println("Quitting...")
+		log.Fatalf("failed to serve: %v", err)
+	}
 
 	// Start the gRPC server
 	fmt.Println("Starting gRPC server on port 50051...")
