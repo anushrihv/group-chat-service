@@ -17,7 +17,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -946,7 +945,7 @@ func (g *groupChatServer) HealthCheck(_ context.Context, request *gen.HealthChec
 }
 
 func (g *groupChatServer) initializeAllServers() {
-	g.allServers = []string{"localhost:50051", "localhost:50052", "localhost:50053", "localhost:50054", "localhost:50055"}
+	g.allServers = []string{"172.30.100.101:50051", "172.30.100.102:50051", "172.30.100.103:50051", "172.30.100.104:50051", "172.30.100.105:50051"}
 	g.connectedServers = make(map[int32]gen.GroupChatClient)
 }
 
@@ -1155,15 +1154,15 @@ func getAddressFromArgs(serverId int64) string {
 
 	switch serverId {
 	case 1:
-		address = "localhost:50051"
+		address = "172.30.100.101:50051"
 	case 2:
-		address = "localhost:50052"
+		address = "172.30.100.102:50051"
 	case 3:
-		address = "localhost:50053"
+		address = "172.30.100.103:50051"
 	case 4:
-		address = "localhost:50054"
+		address = "172.30.100.104:50051"
 	case 5:
-		address = "localhost:50055"
+		address = "172.30.100.105:50051"
 	}
 	return address
 }
@@ -1206,7 +1205,7 @@ func main() {
 	}
 
 	// Start the gRPC server
-	fmt.Println("Starting gRPC server on port " + strings.Split(address, ":")[1])
+	fmt.Println("Starting gRPC server")
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
