@@ -48,6 +48,7 @@ message AppendChatRequest {
   string message_id = 4;
   REQUEST_TYPE request_type = 5;
   string client_id = 6;
+  google.protobuf.Timestamp timestamp = 7;
 }
 
 message AppendChatResponse {

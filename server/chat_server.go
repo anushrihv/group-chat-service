@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -347,7 +348,7 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 	}
 
 	if ok {
-		messageID, err := g.createMessage(req.UserName, req.GroupName, req.Message, req.MessageId)
+		message, err := g.createMessage(req.UserName, req.GroupName, req.Message, req.MessageId, req.Timestamp)
 		if err != nil {
 			return nil, errors.New("failed to append message from user " + req.UserName + " in group " +
 				req.GroupName)
@@ -355,7 +356,8 @@ func (g *groupChatServer) AppendChat(_ context.Context, req *gen.AppendChatReque
 
 		if req.ClientId != "" {
 			req.ClientId = ""
-			req.MessageId = messageID
+			req.MessageId = message.MessageId
+			req.Timestamp = message.Timestamp
 			go g.updateAppendChatOnOtherServers(req)
 		}
 
@@ -393,10 +395,13 @@ func (g *groupChatServer) updateAppendChatOnOtherServers(req *gen.AppendChatRequ
 	}
 }
 
-func (g *groupChatServer) createMessage(userName, groupName, message, messageId string) (string, error) {
+func (g *groupChatServer) createMessage(userName, groupName, message, messageId string, timestamp *timestamppb.Timestamp) (*gen.Message, error) {
 	// update messages in memory
 	if messageId == "" {
 		messageId = uuid.New().String()
+	}
+	if timestamp == nil {
+		timestamp = timestamppb.New(time.Now())
 	}
 	messageObject := &gen.Message{
 		MessageId: messageId,
@@ -404,7 +409,7 @@ func (g *groupChatServer) createMessage(userName, groupName, message, messageId 
 		Owner:     userName,
 		Likes:     make(map[string]*timestamppb.Timestamp),
 		Unlikes:   make(map[string]*timestamppb.Timestamp),
-		Timestamp: timestamppb.New(time.Now()),
+		Timestamp: timestamp,
 	}
 	g.mu.Lock()
 	g.groupState[groupName].Messages[messageId] = messageObject
@@ -416,12 +421,12 @@ func (g *groupChatServer) createMessage(userName, groupName, message, messageId 
 	err := g.persistDataOnFile(fileName, messageObject)
 	if err != nil {
 		fmt.Println("Failed to persist message "+messageId, err)
-		return "", err
+		return nil, err
 	}
 
 	// update clients
 	g.groupUpdatesChan <- groupName
-	return messageId, nil
+	return messageObject, nil
 }
 
 func (g *groupChatServer) persistDataOnFile(fileName string, obj interface{}) error {
@@ -467,8 +472,10 @@ func (g *groupChatServer) appendMessageInOrder(messageOrder []string, newMessage
 		}
 	}
 
+	newMessageOrder := make([]string, len(messageOrder[0:i+1]))
+	copy(newMessageOrder, messageOrder[0:i+1])
 	// append the new message ordered by timestamps
-	newMessageOrder := append(messageOrder[0:i+1], newMessage.MessageId)
+	newMessageOrder = append(newMessageOrder, newMessage.MessageId)
 
 	if i < n-1 {
 		newMessageOrder = append(newMessageOrder, messageOrder[i+1:n]...)
@@ -728,7 +735,7 @@ func (g *groupChatServer) SubscribeToGroupUpdates(stream gen.GroupChat_Subscribe
 		case <-stream.Context().Done():
 			clientInfo := g.clients[stream]
 			fmt.Println("stream to be removed : ", stream)
-			if clientInfo != nil {
+			if clientInfo != nil && clientInfo.GroupName != "" && clientInfo.UserName != "" {
 				_ = g.removeUserFromGroup(clientInfo.UserName, clientInfo.GroupName, clientInfo.ClientId)
 			}
 			g.RemoveClient(stream)
@@ -945,7 +952,7 @@ func (g *groupChatServer) HealthCheck(_ context.Context, request *gen.HealthChec
 }
 
 func (g *groupChatServer) initializeAllServers() {
-	g.allServers = []string{"localhost:50051", "localhost:50052", "localhost:50053", "localhost:50054", "localhost:50055"}
+	g.allServers = []string{"172.30.100.101:50051", "172.30.100.102:50052", "172.30.100.103:50053", "172.30.100.104:50054", "172.30.100.105:50055"}
 	g.connectedServers = make(map[int32]gen.GroupChatClient)
 }
 
@@ -959,9 +966,14 @@ func (g *groupChatServer) createUpdateFiles() {
 			if err != nil {
 				fmt.Println("Failed to create directory "+filepath.Dir(fileName), err)
 			}
-			_, err = os.Create(fileName)
-			if err != nil {
-				panic(err)
+
+			// Check if the file exists before creating it
+			_, err = os.Stat(fileName)
+			if os.IsNotExist(err) {
+				_, err = os.Create(fileName)
+				if err != nil {
+					panic(err)
+				}
 			}
 		}
 	}
@@ -1092,7 +1104,7 @@ func (g *groupChatServer) readUsersFile(group string) error {
 }
 
 func (g *groupChatServer) readAllMessageFiles(group string) error {
-	messagesFolderPath := filePrefix + "/" + group + "/messages/"
+	messagesFolderPath := filePrefix + group + "/messages/"
 	msgFiles, err := os.ReadDir(messagesFolderPath)
 	if err != nil {
 		return err
@@ -1149,9 +1161,33 @@ func (g *groupChatServer) readMessageOrderFile(group string) error {
 	return nil
 }
 
+func getAddressFromArgs(serverId int64) string {
+	var address string
+
+	switch serverId {
+	case 1:
+		address = "172.30.100.101:50051"
+	case 2:
+		address = "172.30.100.102:50052"
+	case 3:
+		address = "172.30.100.103:50053"
+	case 4:
+		address = "172.30.100.104:50054"
+	case 5:
+		address = "172.30.100.105:50055"
+	}
+	return address
+}
+
 func main() {
+	args := os.Args
+	serverId, _ := strconv.ParseInt(args[2], 10, 32)
+	filePrefix = "../data/" + strconv.FormatInt(serverId, 10) + "/"
+
+	address := getAddressFromArgs(serverId)
+
 	// Create a TCP listener
-	lis, err := net.Listen("tcp", "localhost:50052")
+	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -1159,9 +1195,7 @@ func main() {
 	// Create a new gRPC server instance
 	s := grpc.NewServer()
 	groupUpdatesChan := make(chan string)
-	args := os.Args
-	serverId, _ := strconv.ParseInt(args[2], 10, 32)
-	filePrefix = "../data/" + strconv.FormatInt(serverId, 10) + "/"
+
 	// Register your server implementation with the gRPC server
 	srv := &groupChatServer{
 		groupState:       make(map[string]*gen.GroupData),
@@ -1183,7 +1217,7 @@ func main() {
 	}
 
 	// Start the gRPC server
-	fmt.Println("Starting gRPC server on port 50051...")
+	fmt.Println("Starting gRPC server on port " + strings.Split(address, ":")[1])
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

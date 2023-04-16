@@ -26,5 +26,4 @@ RUN go mod tidy
 RUN protoc --go_out=gen --go_opt=paths=source_relative --go-grpc_out=gen --go-grpc_opt=paths=source_relative chat_service.proto
 RUN go build client/chat_client.go
 RUN go build server/chat_server.go
-ENTRYPOINT /bin/bash
 
