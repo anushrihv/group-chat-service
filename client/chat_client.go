@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"group-chat-service/gen"
@@ -17,12 +18,16 @@ import (
 var client gen.GroupChatClient
 var conn *grpc.ClientConn
 var groupName, userName string
+var clientID string
 
 func main() {
 
 	fmt.Println("Welcome to the GroupChat service!")
 	var stream gen.GroupChat_SubscribeToGroupUpdatesClient
 	var err error
+
+	// assign unique client ID
+	clientID = uuid.New().String()
 
 outer:
 	for {
@@ -58,43 +63,69 @@ outer:
 				go listenToGroupUpdates(stream, client)
 			}
 		case "u":
-			if strings.Compare(userName, commandFields[1]) != 0 {
+			if client != nil && strings.Compare(userName, commandFields[1]) != 0 {
 				userName = login(commandFields[1], client)
 				groupName = ""
 				updateClientInformationOnServer(userName, groupName, stream)
+			} else if client == nil {
+				fmt.Println("Server connection has not been established")
 			} else {
 				fmt.Println("User is already logged in as " + userName)
 			}
 		case "j":
 			newGroupName := commandFields[1]
-			if strings.Compare(groupName, newGroupName) == 0 {
+			if client != nil && strings.Compare(groupName, newGroupName) == 0 {
 				fmt.Println("User has already joined the group " + newGroupName)
+			} else if client == nil {
+				fmt.Println("Server connection has not been established")
 			} else {
 				groupName = joinGroupChat(userName, groupName, newGroupName, client)
 				updateClientInformationOnServer(userName, newGroupName, stream)
 			}
 		case "a":
-			message := userCommand[2:len(userCommand)]
-			if userCommand[len(userCommand)-1:] == "\r" {
-				message = userCommand[2 : len(userCommand)-1]
+			if client == nil {
+				fmt.Println("Server connection has not been established")
+			} else {
+				message := userCommand[2:len(userCommand)]
+				if userCommand[len(userCommand)-1:] == "\r" {
+					message = userCommand[2 : len(userCommand)-1]
+				}
+				appendChat(userName, groupName, message, client)
 			}
-			appendChat(userName, groupName, message, client)
 		case "l":
-			messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
-			if err != nil {
-				fmt.Println("Invalid message id")
+			if client == nil {
+				fmt.Println("Server connection has not been established")
+			} else {
+				messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
+				if err != nil {
+					fmt.Println("Invalid message id")
+				}
+				messagePos := int32(messageId64)
+				likeChat(userName, groupName, messagePos, client)
 			}
-			messageId := int32(messageId64)
-			likeChat(userName, groupName, messageId, client)
 		case "r":
-			messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
-			if err != nil {
-				fmt.Println("Invalid message id")
+			if client == nil {
+				fmt.Println("Server connection has not been established")
+			} else {
+				messageId64, err := strconv.ParseInt(commandFields[1], 10, 64)
+				if err != nil {
+					fmt.Println("Invalid message id")
+				}
+				messagePos := int32(messageId64)
+				removeLikeChat(userName, groupName, messagePos, client)
 			}
-			messageId := int32(messageId64)
-			removeLikeChat(userName, groupName, messageId, client)
 		case "p":
-			printHistory(userName, groupName, client)
+			if client == nil {
+				fmt.Println("Server connection has not been established")
+			} else {
+				printHistory(userName, groupName, client)
+			}
+		case "v":
+			if client == nil {
+				fmt.Println("Server connection has not been established")
+			} else {
+				printConnectedServers(client)
+			}
 		case "q":
 			fmt.Println("exiting client")
 			conn.Close()
@@ -130,6 +161,8 @@ func login(newUserName string, client gen.GroupChatClient) string {
 		NewUserName:  newUserName,
 		OldUserName:  userName,
 		OldGroupName: groupName,
+		ClientId:     clientID,
+		RequestType:  gen.REQUEST_TYPE_LOGIN,
 	}
 
 	_, err := client.Login(context.Background(), &loginRequest)
@@ -155,6 +188,8 @@ func joinGroupChat(userName, oldGroupName, newGroupName string, client gen.Group
 		NewGroupName: newGroupName,
 		OldGroupName: oldGroupName,
 		UserName:     userName,
+		RequestType:  gen.REQUEST_TYPE_JOIN_CHAT,
+		ClientId:     clientID,
 	}
 
 	_, err := client.JoinChat(context.Background(), &joinChatRequest)
@@ -170,9 +205,11 @@ func joinGroupChat(userName, oldGroupName, newGroupName string, client gen.Group
 func appendChat(userName, groupName, message string, client gen.GroupChatClient) {
 
 	appendChatRequest := gen.AppendChatRequest{
-		UserName:  userName,
-		GroupName: groupName,
-		Message:   message,
+		UserName:    userName,
+		GroupName:   groupName,
+		Message:     message,
+		RequestType: gen.REQUEST_TYPE_APPEND,
+		ClientId:    clientID,
 	}
 
 	_, err := client.AppendChat(context.Background(), &appendChatRequest)
@@ -182,12 +219,14 @@ func appendChat(userName, groupName, message string, client gen.GroupChatClient)
 
 }
 
-func likeChat(userName, groupName string, messageId int32, client gen.GroupChatClient) {
+func likeChat(userName, groupName string, messagePos int32, client gen.GroupChatClient) {
 
 	likeChatRequest := gen.LikeChatRequest{
-		UserName:  userName,
-		GroupName: groupName,
-		MessageId: messageId,
+		UserName:    userName,
+		GroupName:   groupName,
+		MessagePos:  messagePos,
+		RequestType: gen.REQUEST_TYPE_LIKE,
+		ClientId:    clientID,
 	}
 
 	_, err := client.LikeChat(context.Background(), &likeChatRequest)
@@ -197,12 +236,14 @@ func likeChat(userName, groupName string, messageId int32, client gen.GroupChatC
 
 }
 
-func removeLikeChat(userName, groupName string, messageId int32, client gen.GroupChatClient) {
+func removeLikeChat(userName, groupName string, messagePos int32, client gen.GroupChatClient) {
 
 	removeLikeRequest := gen.RemoveLikeRequest{
-		UserName:  userName,
-		GroupName: groupName,
-		MessageId: messageId,
+		UserName:    userName,
+		GroupName:   groupName,
+		MessagePos:  messagePos,
+		RequestType: gen.REQUEST_TYPE_UNLIKE,
+		ClientId:    clientID,
 	}
 
 	_, err := client.RemoveLike(context.Background(), &removeLikeRequest)
@@ -232,11 +273,25 @@ func printHistory(userName, groupName string, client gen.GroupChatClient) {
 	}
 	fmt.Println()
 	fmt.Println("Messages : ")
-	for _, message := range printHistoryResponse.GroupData.Messages {
-		fmt.Printf("%d. %s: %s\n", message.MessageId, message.Owner, message.Message)
+	for _, messageID := range printHistoryResponse.GroupData.MessageOrder {
+		message := printHistoryResponse.GroupData.Messages[messageID]
+		fmt.Printf("%s. %s: %s\n", message.MessageId, message.Owner, message.Message)
 		fmt.Println("Likes : ", len(message.Likes))
 	}
 
+}
+
+func printConnectedServers(client gen.GroupChatClient) {
+	req := &gen.PrintConnectedServersRequest{}
+	response, err := client.PrintConnectedServers(context.Background(), req)
+	if err != nil {
+		fmt.Println("Failed to get list of connected servers", err)
+	} else if len(response.ServerIds) == 0 {
+		fmt.Println("Server is not connected to any other server")
+	} else {
+		fmt.Print("Server is currently connected to the following servers : ")
+		fmt.Println(response.ServerIds)
+	}
 }
 
 func listenToGroupUpdates(stream gen.GroupChat_SubscribeToGroupUpdatesClient, client gen.GroupChatClient) {
@@ -278,8 +333,9 @@ func PrintGroupState(client gen.GroupChatClient) {
 	}
 	fmt.Println()
 	fmt.Println("Messages : ")
-	for _, message := range refreshChatResponse.GroupData.Messages {
-		fmt.Printf("%d. %s: %s\n", message.MessageId, message.Owner, message.Message)
+	for _, messageID := range refreshChatResponse.GroupData.MessageOrder {
+		message := refreshChatResponse.GroupData.Messages[messageID]
+		fmt.Printf("%s. %s: %s\n", message.MessageId, message.Owner, message.Message)
 		fmt.Println("Likes : ", len(message.Likes))
 		fmt.Println()
 	}
@@ -291,6 +347,7 @@ func updateClientInformationOnServer(userName string, groupName string,
 	err := stream.Send(&gen.ClientInformation{
 		UserName:  userName,
 		GroupName: groupName,
+		ClientId:  clientID,
 	})
 	if err != nil {
 		fmt.Println("failed to update the server with the client information for user name " + userName +

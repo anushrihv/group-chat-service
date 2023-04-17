@@ -8,7 +8,7 @@ protoc --go_out=gen --go_opt=paths=source_relative \
 
 To build the image, run the following command from the application’s root directory:
 ```
-docker build . -t "group-chat-service"
+docker build . -t "cs2510_p2"
 ```
 To run a container using this image, run:
 ```

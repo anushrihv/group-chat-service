@@ -30,6 +30,8 @@ type GroupChatClient interface {
 	PrintHistory(ctx context.Context, in *PrintHistoryRequest, opts ...grpc.CallOption) (*PrintHistoryResponse, error)
 	RefreshChat(ctx context.Context, in *RefreshChatRequest, opts ...grpc.CallOption) (*RefreshChatResponse, error)
 	SubscribeToGroupUpdates(ctx context.Context, opts ...grpc.CallOption) (GroupChat_SubscribeToGroupUpdatesClient, error)
+	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
+	PrintConnectedServers(ctx context.Context, in *PrintConnectedServersRequest, opts ...grpc.CallOption) (*PrintConnectedServersResponse, error)
 }
 
 type groupChatClient struct {
@@ -134,6 +136,24 @@ func (x *groupChatSubscribeToGroupUpdatesClient) Recv() (*GroupUpdates, error) {
 	return m, nil
 }
 
+func (c *groupChatClient) HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
+	out := new(HealthCheckResponse)
+	err := c.cc.Invoke(ctx, "/GroupChat/HealthCheck", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *groupChatClient) PrintConnectedServers(ctx context.Context, in *PrintConnectedServersRequest, opts ...grpc.CallOption) (*PrintConnectedServersResponse, error) {
+	out := new(PrintConnectedServersResponse)
+	err := c.cc.Invoke(ctx, "/GroupChat/PrintConnectedServers", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GroupChatServer is the server API for GroupChat service.
 // All implementations must embed UnimplementedGroupChatServer
 // for forward compatibility
@@ -146,6 +166,8 @@ type GroupChatServer interface {
 	PrintHistory(context.Context, *PrintHistoryRequest) (*PrintHistoryResponse, error)
 	RefreshChat(context.Context, *RefreshChatRequest) (*RefreshChatResponse, error)
 	SubscribeToGroupUpdates(GroupChat_SubscribeToGroupUpdatesServer) error
+	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
+	PrintConnectedServers(context.Context, *PrintConnectedServersRequest) (*PrintConnectedServersResponse, error)
 	mustEmbedUnimplementedGroupChatServer()
 }
 
@@ -176,6 +198,12 @@ func (UnimplementedGroupChatServer) RefreshChat(context.Context, *RefreshChatReq
 }
 func (UnimplementedGroupChatServer) SubscribeToGroupUpdates(GroupChat_SubscribeToGroupUpdatesServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeToGroupUpdates not implemented")
+}
+func (UnimplementedGroupChatServer) HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method HealthCheck not implemented")
+}
+func (UnimplementedGroupChatServer) PrintConnectedServers(context.Context, *PrintConnectedServersRequest) (*PrintConnectedServersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrintConnectedServers not implemented")
 }
 func (UnimplementedGroupChatServer) mustEmbedUnimplementedGroupChatServer() {}
 
@@ -342,6 +370,42 @@ func (x *groupChatSubscribeToGroupUpdatesServer) Recv() (*ClientInformation, err
 	return m, nil
 }
 
+func _GroupChat_HealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HealthCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GroupChatServer).HealthCheck(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/GroupChat/HealthCheck",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GroupChatServer).HealthCheck(ctx, req.(*HealthCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GroupChat_PrintConnectedServers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrintConnectedServersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GroupChatServer).PrintConnectedServers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/GroupChat/PrintConnectedServers",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GroupChatServer).PrintConnectedServers(ctx, req.(*PrintConnectedServersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GroupChat_ServiceDesc is the grpc.ServiceDesc for GroupChat service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -376,6 +440,14 @@ var GroupChat_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RefreshChat",
 			Handler:    _GroupChat_RefreshChat_Handler,
+		},
+		{
+			MethodName: "HealthCheck",
+			Handler:    _GroupChat_HealthCheck_Handler,
+		},
+		{
+			MethodName: "PrintConnectedServers",
+			Handler:    _GroupChat_PrintConnectedServers_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

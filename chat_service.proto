@@ -2,6 +2,8 @@ syntax = "proto3";
 
 option go_package = "group_chat_service/gen";
 
+import "google/protobuf/timestamp.proto";
+
 service GroupChat {
   rpc Login (LoginRequest) returns (LoginResponse) {}
   rpc JoinChat (JoinChatRequest) returns (JoinChatResponse) {}
@@ -11,12 +13,16 @@ service GroupChat {
   rpc PrintHistory (PrintHistoryRequest) returns (PrintHistoryResponse) {}
   rpc RefreshChat(RefreshChatRequest) returns (RefreshChatResponse) {}
   rpc SubscribeToGroupUpdates(stream ClientInformation) returns (stream GroupUpdates) {}
+  rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse) {}
+  rpc PrintConnectedServers (PrintConnectedServersRequest) returns (PrintConnectedServersResponse) {}
 }
 
 message LoginRequest {
   string old_user_name = 1;
   string old_group_name = 2;
   string new_user_name = 3;
+  string client_id = 4;
+  REQUEST_TYPE request_type = 5;
 }
 
 message LoginResponse {
@@ -27,6 +33,8 @@ message JoinChatRequest {
   string new_group_name = 1;
   string old_group_name = 2;
   string user_name = 3;
+  REQUEST_TYPE request_type = 4;
+  string client_id = 5;
 }
 
 message JoinChatResponse {
@@ -37,6 +45,10 @@ message AppendChatRequest {
   string user_name = 1;
   string group_name = 2;
   string message = 3;
+  string message_id = 4;
+  REQUEST_TYPE request_type = 5;
+  string client_id = 6;
+  google.protobuf.Timestamp timestamp = 7;
 }
 
 message AppendChatResponse {
@@ -46,7 +58,10 @@ message AppendChatResponse {
 message LikeChatRequest {
   string user_name = 1;
   string group_name = 2;
-  int32 message_id = 3;
+  int32 message_pos = 3;
+  REQUEST_TYPE request_type = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  string client_id = 6;
 }
 
 
@@ -56,7 +71,10 @@ message LikeChatResponse {
 message RemoveLikeRequest {
   string user_name = 1;
   string group_name = 2;
-  int32 message_id = 3;
+  int32 message_pos = 3;
+  REQUEST_TYPE request_type = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  string client_id = 6;
 }
 
 message RemoveLikeResponse {
@@ -84,9 +102,26 @@ message RefreshChatResponse {
   GroupData group_data = 2;
 }
 
+message HealthCheckRequest {
+
+}
+
+message HealthCheckResponse {
+
+}
+
+message PrintConnectedServersRequest {
+
+}
+
+message PrintConnectedServersResponse {
+  repeated int32 server_ids = 1;
+}
+
 message ClientInformation {
   string user_name = 1;
   string group_name = 2;
+  string client_id = 3;
 }
 
 message GroupUpdates {
@@ -94,14 +129,30 @@ message GroupUpdates {
 }
 
 message GroupData {
-  map<string, int32> users = 1;
-  repeated Message messages = 2;
+  map<string, Client> users = 1;
+  map<string, Message> messages = 2;
+  repeated string messageOrder = 3;
 }
 
+message Client {
+  map<string, bool> clients = 1;
+}
 
 message Message {
-  int32 message_id = 1;
+  string message_id = 1;
   string message = 2;
   string owner = 3;
-  map<string, bool> likes = 4;
+  map<string, google.protobuf.Timestamp> likes = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  map<string, google.protobuf.Timestamp> unlikes = 6;
 }
+
+enum REQUEST_TYPE{
+  INVALID = 0;
+  LOGIN = 1;
+  JOIN_CHAT = 2;
+  APPEND = 3;
+  LIKE = 4;
+  UNLIKE = 5;
+}
+
