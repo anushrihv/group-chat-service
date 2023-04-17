@@ -6,28 +6,30 @@ protoc --go_out=gen --go_opt=paths=source_relative \
 ```
 # Running the Application
 
-To build the image, run the following command from the application’s root directory:
+To build the image, run the following command from the application’s root directory
 ```
 docker build . -t "cs2510_p2"
 ```
-To run a container using this image, run:
+To run a containers of servers using this image, run:
 ```
-docker run -it --name chatApp group-chat-service
+python test_p2.py init
 ```
-To run the server program from the interactive terminal that was allocated by the previous command:
+To run the client program
 ```
-cd server
-go run chat_server.go
+docker run -it --cap-add=NET_ADMIN --network cs2510 --rm --name cs2510_client1 cs2510_p2 /bin/bash
+./chat_client
 ```
-This command will give you an interactive bash shell on the container. Run this on separate terminals to run one or more clients:
+Once the client has started, the client can connect to one of the following server addresses
 ```
-docker exec -it chatApp bash
+172.30.100.101:50051
+172.30.100.102:50052
+172.30.100.103:50053
+172.30.100.104:50054
+172.30.100.105:50055
+
 ```
-To run the client program from the interactive terminal that was allocated by the previous command:
-```
-cd client
-go run chat_client.go
-```
+
+Happy testing :)
 
 # Supported user inputs
 
@@ -46,3 +48,5 @@ go run chat_client.go
 `p`: to print the group chat history
 
 `q`: to quit the client
+
+`v`: print list of all connected servers
