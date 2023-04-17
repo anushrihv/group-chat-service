@@ -166,7 +166,7 @@ func (g *groupChatServer) JoinChat(_ context.Context, req *gen.JoinChatRequest) 
 	}
 
 	if clientExists := g.validateGroupMembership(req.NewGroupName, req.UserName, req.ClientId); clientExists {
-		return nil, nil
+		return &gen.JoinChatResponse{}, nil
 	}
 
 	if req.OldGroupName != "" {
@@ -1182,7 +1182,7 @@ func getAddressFromArgs(serverId int64) string {
 func main() {
 	args := os.Args
 	serverId, _ := strconv.ParseInt(args[2], 10, 32)
-	filePrefix = "../data/" + strconv.FormatInt(serverId, 10) + "/"
+	filePrefix = "data/" + strconv.FormatInt(serverId, 10) + "/"
 
 	address := getAddressFromArgs(serverId)
 

@@ -322,7 +322,7 @@ func PrintGroupState(client gen.GroupChatClient) {
 
 	refreshChatResponse, err := client.RefreshChat(context.Background(), &refreshChatRequest)
 	if err != nil {
-		fmt.Println("Error occurred while refreshing chat ", err) // TODO remove
+		//fmt.Println("Error occurred while refreshing chat ", err)
 		return
 	}
 
